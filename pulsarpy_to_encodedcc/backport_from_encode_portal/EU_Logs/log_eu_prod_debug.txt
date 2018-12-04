@@ -1,0 +1,185 @@
+2018-06-13 15:56:33,921:debug:	Connecting to www.encodeproject.org
+2018-06-13 15:56:33,923:debug:	submission=False: In non-submission mode.
+2018-06-13 15:56:45,147:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-06-13 15:57:49,238:debug:	>>>>>>GETTING ENCBS133ZSU From DCC with URL https://www.encodeproject.org/ENCBS133ZSU/?format=json
+2018-06-13 15:59:23,607:debug:	>>>>>>GETTING ENCBS012ALX From DCC with URL https://www.encodeproject.org/ENCBS012ALX/?format=json
+2018-06-13 16:01:24,862:debug:	Searching DCC with query https://www.encodeproject.org/search/?assay_title=ChIP-seq&award.rfa=ENCODE4&lab.title=Michael+Snyder%2C+Stanford&limit=all&type=Experiment.
+2018-07-16 17:32:05,711:debug:	Connecting to www.encodeproject.org
+2018-07-16 17:32:05,713:debug:	submission=False: In non-submission mode.
+2018-07-16 17:32:05,714:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 17:33:15,422:debug:	Connecting to www.encodeproject.org
+2018-07-16 17:33:15,425:debug:	submission=False: In non-submission mode.
+2018-07-16 17:33:15,426:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 17:35:19,149:debug:	Connecting to www.encodeproject.org
+2018-07-16 17:35:19,152:debug:	submission=False: In non-submission mode.
+2018-07-16 17:35:19,153:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 17:35:49,974:debug:	Connecting to www.encodeproject.org
+2018-07-16 17:35:49,976:debug:	submission=False: In non-submission mode.
+2018-07-16 17:35:49,977:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 17:35:50,525:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 17:38:37,826:debug:	Connecting to www.encodeproject.org
+2018-07-16 17:38:37,834:debug:	submission=False: In non-submission mode.
+2018-07-16 17:38:37,834:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 17:38:38,415:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 17:39:09,682:debug:	Connecting to www.encodeproject.org
+2018-07-16 17:39:09,684:debug:	submission=False: In non-submission mode.
+2018-07-16 17:39:09,684:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 17:39:10,893:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 17:42:39,904:debug:	Connecting to www.encodeproject.org
+2018-07-16 17:42:39,907:debug:	submission=False: In non-submission mode.
+2018-07-16 17:42:39,907:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 17:42:40,521:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 17:43:04,596:debug:	Connecting to www.encodeproject.org
+2018-07-16 17:43:04,599:debug:	submission=False: In non-submission mode.
+2018-07-16 17:43:04,599:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 17:43:05,468:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 17:43:05,589:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 17:44:00,170:debug:	Connecting to www.encodeproject.org
+2018-07-16 17:44:00,173:debug:	submission=False: In non-submission mode.
+2018-07-16 17:44:00,173:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 17:44:00,793:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 17:44:00,917:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 17:44:56,395:debug:	Connecting to www.encodeproject.org
+2018-07-16 17:44:56,397:debug:	submission=False: In non-submission mode.
+2018-07-16 17:44:56,398:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 17:44:56,989:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 17:44:57,105:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 17:45:51,091:debug:	Connecting to www.encodeproject.org
+2018-07-16 17:45:51,092:debug:	submission=False: In non-submission mode.
+2018-07-16 17:45:51,093:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 17:45:51,731:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 17:45:51,843:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 17:45:51,960:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 17:57:06,828:debug:	Connecting to www.encodeproject.org
+2018-07-16 17:57:06,830:debug:	submission=False: In non-submission mode.
+2018-07-16 17:57:06,830:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 17:57:07,347:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 17:57:07,482:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 17:57:07,588:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 18:22:23,505:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:22:23,507:debug:	submission=False: In non-submission mode.
+2018-07-16 18:22:23,507:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 18:22:44,233:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:22:44,236:debug:	submission=False: In non-submission mode.
+2018-07-16 18:22:44,236:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 18:22:45,494:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:22:45,606:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 18:22:45,702:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 18:35:19,904:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:35:19,907:debug:	submission=False: In non-submission mode.
+2018-07-16 18:35:19,907:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 18:35:20,470:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:35:20,615:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 18:35:21,362:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:35:21,362:debug:	submission=False: In non-submission mode.
+2018-07-16 18:35:21,363:debug:	>>>>>>GETTING ENCSR448TVS From DCC with URL https://www.encodeproject.org/ENCSR448TVS/?format=json
+2018-07-16 18:35:21,824:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:35:22,011:debug:	>>>>>>GETTING genetic-modifications/ENCGM915FFB From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM915FFB/?format=json
+2018-07-16 18:35:22,846:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:35:22,847:debug:	submission=False: In non-submission mode.
+2018-07-16 18:35:22,847:debug:	>>>>>>GETTING ENCSR010NQA From DCC with URL https://www.encodeproject.org/ENCSR010NQA/?format=json
+2018-07-16 18:35:23,656:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:35:23,760:debug:	>>>>>>GETTING biosamples_used From DCC with URL https://www.encodeproject.org/biosamples_used/?format=json
+2018-07-16 18:35:24,209:debug:	>>>>>>GETTING amount_units From DCC with URL https://www.encodeproject.org/amount_units/?format=json
+2018-07-16 18:35:24,336:debug:	>>>>>>GETTING documents From DCC with URL https://www.encodeproject.org/documents/?format=json
+2018-07-16 18:36:43,417:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:36:43,419:debug:	submission=False: In non-submission mode.
+2018-07-16 18:36:43,419:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 18:36:44,229:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:36:44,438:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 18:36:45,183:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:36:45,183:debug:	submission=False: In non-submission mode.
+2018-07-16 18:36:45,184:debug:	>>>>>>GETTING ENCSR448TVS From DCC with URL https://www.encodeproject.org/ENCSR448TVS/?format=json
+2018-07-16 18:36:45,694:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:36:45,798:debug:	>>>>>>GETTING genetic-modifications/ENCGM915FFB From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM915FFB/?format=json
+2018-07-16 18:38:04,621:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:38:04,623:debug:	submission=False: In non-submission mode.
+2018-07-16 18:38:04,623:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 18:38:05,543:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:38:05,654:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 18:38:05,764:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 18:38:06,501:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:38:06,501:debug:	submission=False: In non-submission mode.
+2018-07-16 18:38:06,501:debug:	>>>>>>GETTING ENCSR448TVS From DCC with URL https://www.encodeproject.org/ENCSR448TVS/?format=json
+2018-07-16 18:38:07,047:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:38:07,151:debug:	>>>>>>GETTING genetic-modifications/ENCGM915FFB From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM915FFB/?format=json
+2018-07-16 18:38:07,243:debug:	>>>>>>GETTING genetic-modifications/ENCGM915FFB From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM915FFB/?format=json
+2018-07-16 18:38:07,982:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:38:07,983:debug:	submission=False: In non-submission mode.
+2018-07-16 18:38:07,983:debug:	>>>>>>GETTING ENCSR010NQA From DCC with URL https://www.encodeproject.org/ENCSR010NQA/?format=json
+2018-07-16 18:38:08,515:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:38:08,627:debug:	>>>>>>GETTING aliases From DCC with URL https://www.encodeproject.org/aliases/?format=json
+2018-07-16 18:38:08,740:debug:	>>>>>>GETTING treatment_term_id From DCC with URL https://www.encodeproject.org/treatment_term_id/?format=json
+2018-07-16 18:38:08,862:debug:	>>>>>>GETTING date_created From DCC with URL https://www.encodeproject.org/date_created/?format=json
+2018-07-16 18:38:08,974:debug:	>>>>>>GETTING @id From DCC with URL https://www.encodeproject.org/@id/?format=json
+2018-07-16 18:38:09,084:debug:	>>>>>>GETTING amount From DCC with URL https://www.encodeproject.org/amount/?format=json
+2018-07-16 18:38:09,191:debug:	>>>>>>GETTING treatment_term_name From DCC with URL https://www.encodeproject.org/treatment_term_name/?format=json
+2018-07-16 18:38:09,304:debug:	>>>>>>GETTING treatment_type From DCC with URL https://www.encodeproject.org/treatment_type/?format=json
+2018-07-16 18:38:09,413:debug:	>>>>>>GETTING duration From DCC with URL https://www.encodeproject.org/duration/?format=json
+2018-07-16 18:38:09,530:debug:	>>>>>>GETTING dbxrefs From DCC with URL https://www.encodeproject.org/dbxrefs/?format=json
+2018-07-16 18:38:09,632:debug:	>>>>>>GETTING schema_version From DCC with URL https://www.encodeproject.org/schema_version/?format=json
+2018-07-16 18:38:09,743:debug:	>>>>>>GETTING submitted_by From DCC with URL https://www.encodeproject.org/submitted_by/?format=json
+2018-07-16 18:38:09,851:debug:	>>>>>>GETTING biosamples_used From DCC with URL https://www.encodeproject.org/biosamples_used/?format=json
+2018-07-16 18:38:09,955:debug:	>>>>>>GETTING amount_units From DCC with URL https://www.encodeproject.org/amount_units/?format=json
+2018-07-16 18:38:10,059:debug:	>>>>>>GETTING duration_units From DCC with URL https://www.encodeproject.org/duration_units/?format=json
+2018-07-16 18:38:10,160:debug:	>>>>>>GETTING documents From DCC with URL https://www.encodeproject.org/documents/?format=json
+2018-07-16 18:38:48,298:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:38:48,301:debug:	submission=False: In non-submission mode.
+2018-07-16 18:38:48,302:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 18:38:48,876:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:38:48,978:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 18:38:49,086:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 18:38:49,825:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:38:49,825:debug:	submission=False: In non-submission mode.
+2018-07-16 18:38:49,826:debug:	>>>>>>GETTING ENCSR448TVS From DCC with URL https://www.encodeproject.org/ENCSR448TVS/?format=json
+2018-07-16 18:38:50,302:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:38:50,420:debug:	>>>>>>GETTING genetic-modifications/ENCGM915FFB From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM915FFB/?format=json
+2018-07-16 18:38:50,512:debug:	>>>>>>GETTING genetic-modifications/ENCGM915FFB From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM915FFB/?format=json
+2018-07-16 18:38:51,259:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:38:51,260:debug:	submission=False: In non-submission mode.
+2018-07-16 18:38:51,260:debug:	>>>>>>GETTING ENCSR010NQA From DCC with URL https://www.encodeproject.org/ENCSR010NQA/?format=json
+2018-07-16 18:38:51,736:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:38:51,836:debug:	>>>>>>GETTING uuid From DCC with URL https://www.encodeproject.org/uuid/?format=json
+2018-07-16 18:38:52,018:debug:	>>>>>>GETTING aliases From DCC with URL https://www.encodeproject.org/aliases/?format=json
+2018-07-16 18:38:52,136:debug:	>>>>>>GETTING documents From DCC with URL https://www.encodeproject.org/documents/?format=json
+2018-07-16 18:40:42,851:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:40:42,853:debug:	submission=False: In non-submission mode.
+2018-07-16 18:40:42,853:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 18:40:44,089:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:40:44,198:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 18:40:44,291:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 18:40:45,238:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:40:45,239:debug:	submission=False: In non-submission mode.
+2018-07-16 18:40:45,239:debug:	>>>>>>GETTING ENCSR448TVS From DCC with URL https://www.encodeproject.org/ENCSR448TVS/?format=json
+2018-07-16 18:40:45,774:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:40:45,881:debug:	>>>>>>GETTING genetic-modifications/ENCGM915FFB From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM915FFB/?format=json
+2018-07-16 18:40:45,974:debug:	>>>>>>GETTING genetic-modifications/ENCGM915FFB From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM915FFB/?format=json
+2018-07-16 18:40:46,753:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:40:46,754:debug:	submission=False: In non-submission mode.
+2018-07-16 18:40:46,754:debug:	>>>>>>GETTING ENCSR010NQA From DCC with URL https://www.encodeproject.org/ENCSR010NQA/?format=json
+2018-07-16 18:40:47,280:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:40:47,399:debug:	>>>>>>GETTING aliases From DCC with URL https://www.encodeproject.org/aliases/?format=json
+2018-07-16 18:40:47,611:debug:	>>>>>>GETTING treatment_type From DCC with URL https://www.encodeproject.org/treatment_type/?format=json
+2018-07-16 18:40:47,719:debug:	>>>>>>GETTING amount_units From DCC with URL https://www.encodeproject.org/amount_units/?format=json
+2018-07-16 18:40:47,821:debug:	>>>>>>GETTING schema_version From DCC with URL https://www.encodeproject.org/schema_version/?format=json
+2018-07-16 18:40:47,926:debug:	>>>>>>GETTING lab From DCC with URL https://www.encodeproject.org/lab/?format=json
+2018-07-16 18:43:28,470:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:43:28,473:debug:	submission=False: In non-submission mode.
+2018-07-16 18:43:28,473:debug:	>>>>>>GETTING ENCSR525VAT From DCC with URL https://www.encodeproject.org/ENCSR525VAT/?format=json
+2018-07-16 18:43:29,071:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:43:29,219:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 18:43:29,331:debug:	>>>>>>GETTING genetic-modifications/ENCGM094ZOS From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM094ZOS/?format=json
+2018-07-16 18:43:30,331:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:43:30,332:debug:	submission=False: In non-submission mode.
+2018-07-16 18:43:30,332:debug:	>>>>>>GETTING ENCSR448TVS From DCC with URL https://www.encodeproject.org/ENCSR448TVS/?format=json
+2018-07-16 18:43:30,848:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:43:30,963:debug:	>>>>>>GETTING genetic-modifications/ENCGM915FFB From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM915FFB/?format=json
+2018-07-16 18:43:31,060:debug:	>>>>>>GETTING genetic-modifications/ENCGM915FFB From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM915FFB/?format=json
+2018-07-16 18:43:31,821:debug:	Connecting to www.encodeproject.org
+2018-07-16 18:43:31,821:debug:	submission=False: In non-submission mode.
+2018-07-16 18:43:31,821:debug:	>>>>>>GETTING ENCSR010NQA From DCC with URL https://www.encodeproject.org/ENCSR010NQA/?format=json
+2018-07-16 18:43:32,275:debug:	>>>>>>GETTING documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0 From DCC with URL https://www.encodeproject.org/documents/716003cd-3ce7-41ce-b1e3-6f203b6632a0/?format=json
+2018-07-16 18:43:32,380:debug:	>>>>>>GETTING 933a1ff2-43a2-4a54-9c87-aad228d0033e From DCC with URL https://www.encodeproject.org/933a1ff2-43a2-4a54-9c87-aad228d0033e/?format=json
+2018-07-16 18:43:32,570:debug:	>>>>>>GETTING genetic-modifications/ENCGM151IOO From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM151IOO/?format=json
+2018-07-16 18:43:32,732:debug:	>>>>>>GETTING 933a1ff2-43a2-4a54-9c87-aad228d0033e From DCC with URL https://www.encodeproject.org/933a1ff2-43a2-4a54-9c87-aad228d0033e/?format=json
+2018-07-16 18:43:32,954:debug:	>>>>>>GETTING genetic-modifications/ENCGM151IOO From DCC with URL https://www.encodeproject.org/genetic-modifications/ENCGM151IOO/?format=json
