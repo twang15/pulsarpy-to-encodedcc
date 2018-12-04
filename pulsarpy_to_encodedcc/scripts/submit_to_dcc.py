@@ -15,7 +15,7 @@ import argparse
 import inflection
 
 from encode_utils.parent_argparser import dcc_login_parser    
-import pulsarpy.dcc_submit as dcc_submit
+import pulsarpy_to_encodedcc.dcc_submit as dcc_submit
 from pulsarpy import models
 
 MODEL_PROFILE = {}

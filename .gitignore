@@ -1,0 +1,12 @@
+build/
+dist/
+pulsarpy-to-encodedcc.egg-info/
+.nfs*
+*.pyc
+*.txt
+!LICENSE.txt
+!docs/requirements.txt
+docs/_build
+docs/_templates
+.DS_Store
+**/EU_Logs

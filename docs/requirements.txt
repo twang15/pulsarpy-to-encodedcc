@@ -1,0 +1,4 @@
+encode-utils
+pulsarpy
+inflection
+sphinx-argparse

@@ -527,7 +527,7 @@ class Submit():
         data_storage_provider = models.DataStorageProvider(data_storage.data_storage_provider_id)
         if data_storage_provider.name == "DNAnexus":
             # Download file and set file_size and md5sum payload keys
-        dx_file = dxpy.DXFile(dxid=file_uri)
+            dx_file = dxpy.DXFile(dxid=file_uri)
         file_ref = "dnanexus:{file_uri}".format(file_uri)
         aliases = [dx_file.name, file_ref]
         srun = models.Sequencingrun(sres.sequencing_run_id)
