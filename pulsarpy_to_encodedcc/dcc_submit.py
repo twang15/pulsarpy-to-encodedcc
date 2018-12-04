@@ -26,10 +26,12 @@ Optional environment variables:
 import base64
 import logging
 
+from pulsarpy_to_encodedcc import FASTQ_FOLDER
 from pulsarpy import models
 import pulsarpy.utils
 import encode_utils as eu
 import encode_utils.connection as euc
+import encode_utils.utils as euu
 import pdb
 
 
@@ -525,9 +527,22 @@ class Submit():
             raise NoFastqFile("SequencingResult '{}' for R{read_num} does not have a FASTQ file path set.".format(pulsar_sres_id, read_num))
         data_storage = models.DataStorage(srun.data_storage_id)
         data_storage_provider = models.DataStorageProvider(data_storage.data_storage_provider_id)
+        # Initialize file_path to be empty string.
+        file_path = ""
         if data_storage_provider.name == "DNAnexus":
             # Download file and set file_size and md5sum payload keys
             dx_file = dxpy.DXFile(dxid=file_uri)
+            file_path = os.path.join(FASTQ_FOLDER, dx_file.name)
+            # Download command blocks and returns None.
+            dxpy.download_dxfile(dxid=file_uri, filename=file_path, show_progress=True)
+            fsize = os.path.getsize(file_path)
+            md5sum = euu.calculate_md5sum(file_path)
+            payload["file_size"] = fsize
+            payload["md5sum"] = md5sum
+
+        if not file_path:
+            raise Exception("Could not locate FASTQ file for SequencingResult {}; read number {}.".format(pulsar_sres_id, read_num))
+
         file_ref = "dnanexus:{file_uri}".format(file_uri)
         aliases = [dx_file.name, file_ref]
         srun = models.Sequencingrun(sres.sequencing_run_id)
@@ -543,11 +558,14 @@ class Submit():
             payload["read_count"] = read_count
         payload["replicate"] = enc_replicate_id
         payload["run_type"] = sreq.paired_end
-        payload["submitted_file_name"] = file_ref
+        payload["submitted_file_name"] = file_path 
+        # set flowcell_details
+        flowcell_details = {}
+        pulsar_library = models.Library(sres.library_id)
+        flowcell_details["barcode"] = pulsar_library.get_barcode_sequence()
+        flowcell_details["lane"] = srun.lane
+        payload["flowcell_details"] = flowcell_details
         
-        
-        
-
     def get_barcode_details_for_ssc(self, ssc_id):
         """
         This purpose of this method is to provide a value to the library.barcode_details property
