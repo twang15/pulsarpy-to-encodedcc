@@ -30,6 +30,7 @@ from pulsarpy_to_encodedcc import FASTQ_FOLDER
 from pulsarpy import models
 import pulsarpy.utils
 import encode_utils as eu
+import encode_utils.aws_storage
 import encode_utils.connection as euc
 import encode_utils.utils as euu
 import pdb
@@ -497,7 +498,32 @@ class Submit():
 
     def post_fastq_file(self, pulsar_sres_id, read_num, enc_replicate_id, patch=False):
         """
-        Creates a file record on the ENCODE Portal. 
+        Creates a file record on the ENCODE Portal. Checks the SequencingResult in Pulsar to see 
+        where the file is stored. If stored in DNAnexus, the file will be downloaded locally into 
+        the directory given by ``pulsarpy_to_encodedcc.FASTQ_FOLDER`` (the download folder will be
+        checked first to see if the file was previously downloaded before attempting to download.
+        
+        After the file object is created on the ENCODE Portal, it's accession will be stored as the
+        upstream identifier in the Pulsar SequencingResult record for the given read.  Thus, if a 
+        file object was creatd for a R1 FASTQ file, then the `SequencingResult.read1_upstream_identifier`
+        attribute is updated. If instead a file object was created for a R2 FASTQ file, then the
+        `SequencingResult.read2_upstream_identifier`` attribute is updated. 
+
+        Some rather complex logic is used to determine the control FASTQ files when submitting an 
+        experimental replicate's FASTQ file. If the Biosample associated with the SequencingResult
+        is part of a ChipseqExperiment, then the control biosamples consist of the paired input(s) and
+        the wild type input, which in Pulsar are given the attribute names 
+        `ChipseqExperiment.control_replicates` and `ChipseqExperiment.wild_type_control`. A non-control
+        file object on the ENCODE Portal needs to have the ``controlled_by`` property set, which
+        points to one or more control FASTQ file accessions on the ENCODE Portal. 
+        We normally submit them by matching read numbers, so if the file object we are creating is 
+        for a R1 FASTQ file, then all the controlled_by accessions are also R1 FASTQ files. The challenge
+        is in knowing which SequencingResult set to use for control FASTQ files. Since a Biosample can
+        have multiple Libraries, which can have multiple SequencingRequest, which can have multiple
+        SequencingRuns, there can be many sets of SequencingResults. However, since in most cases
+        there will only be one of each, the approach taken here is to use the SequencingResults of
+        the latest SequencingRun of the latest SequencingRequest. Once this simplicity fails to hold,
+        an updated approach will need to be taken. 
 
         Args:
             pulsar_sres_id: A SequencingResult record in Pulsar. 
@@ -508,13 +534,24 @@ class Submit():
                 is to be associated with.
         """
         sres = models.SequencingResult(pulsar_sres_id)
-        srun = models.Sequencingrun(sres.sequencing_run_id)
-        sreq = models.SequencingRequest(sres.sequencing_request_id)
         lib = models.Library(sres.library_id)
         bio = models.Biosample(lib.biosample_id)
+        srun = models.Sequencingrun(sres.sequencing_run_id)
+        sreq = models.SequencingRequest(srun.sequencing_request_id)
         platform = models.Platform(sreq.sequencing_platform_id)
         payload = {}
         payload["aliases"] = []
+        payload["file_format"] = "fastq"
+        payload["output_type"] = "reads"
+        # The Pulsar Platform must already have the upstream_identifier attribute set.
+        payload["platform"] = platform.upstream_identifier
+        # set flowcell_details
+        flowcell_details = {}
+        flowcell_details["barcode"] = lib.get_barcode_sequence()
+        flowcell_details["lane"] = srun.lane
+        payload["flowcell_details"] = flowcell_details
+        payload["replicate"] = enc_replicate_id
+        payload["run_type"] = sreq.paired_end
         if read_num == 1:
             payload["paired_end"] = 1
             file_uri = sres.read1_uri
@@ -525,6 +562,8 @@ class Submit():
             read_count = sres.read2_count
             # Need to set paired_with key in the payload. In this case, 
             # it is expected that R1 has been already submitted.
+            if not sres.read1_upstream_identifier:
+                raise Exception("Can't set paired_with for SequencingResult {} since R1 doesn't have an upstream set.".format(sres.id))
             payload["paired_with"] = sres.read1_upstream_identifier
         if not file_uri:
             raise NoFastqFile("SequencingResult '{}' for R{read_num} does not have a FASTQ file path set.".format(pulsar_sres_id, read_num))
@@ -533,50 +572,42 @@ class Submit():
         # Initialize file_path to be empty string.
         file_path = ""
         if data_storage_provider.name == "DNAnexus":
-            dx_file = dxpy.DXFile(dxid=file_id)
+            dx_file = dxpy.DXFile(dxid=file_uri)
             file_path = os.path.join(FASTQ_FOLDER, dx_file.name)
-            # Download file and set file_size and md5sum payload keys
-            payload.update(download_dx_file(file_uri, file_path)) 
-            # The above call adds the following keys to the payload:
-            #   1. file_size,
-            #   2. md5sum'
+            # Check if file exists and is non-empty in download directory before attempting to download.
+            if not os.path.exists(file_path) or not os.path.getsize(file_path):
+                # Download file.
+                dxpy.download_dxfile(dxid=file_uri, filename=file_path, show_progress=True)
             file_ref = "dnanexus:{file_uri}".format(file_uri)
-            aliases.extend([dx_file.name, file_ref])
+            payload["aliases"].append(file_ref)
+            payload["aliases"].append(os.path.basename(file_path))
+        elif data_storage_provider == "AWS S3 Bucket":
+            file_path = file_uri
+            # Add to payload the keys file_size and md5sum:
+            payload.update(encode_utils.aws_storage.S3Object(s3_uri=file_uri).size_and_md5())
+            payload["aliases"].append(file_uri) # i.e. s3://bucket-name/key
+            payload["aliases"].append(os.path.basename(file_uri))
 
         if not file_path:
             raise Exception("Could not locate FASTQ file for SequencingResult {}; read number {}.".format(pulsar_sres_id, read_num))
+        payload["submitted_file_name"] = file_path 
 
-        full_path = os.path.join(data_storage.folder_base_path, storage_path, file_uri)
+       # Add keys file_size and md5sum to payload
+        payload.update(self.get_fsize_and_md5sum(file_path)
+
         dcc_rep = self.ENC_CONN.get(rec_ids=enc_replicate_id, ignore404=False)
         dcc_exp = dcc_rep["experiment"]
         dcc_exp_accession = dcc_exp["accession"]
         dcc_exp_type = dcc_exp["assay_term_name"] #i.e. ChIP-seq
         if dcc_exp_type == "ChIP-seq":
+            controlled_by = self.get_chipseq_controlled_by(pulsar_biosample=bio, read_num=read_num)
+            if controlled_by:
+                # Will be empty if this is a already a control SequencingResult file.
+                payload["controlled_by"] = controlled_by
+        else:
+            raise Exception("There isn't yet support to set controlled_by for experiments of type {}.".format(dcc_exp_type))
 
-        
-        
-        pulsar_exp = 
-        payload["file_format"] = "fastq"
-        payload["output_type"] = "reads"
-        # The Pulsar Platform must already have the upstream_identifier attribute set.
-        payload["platform"] = platform.upstream_identifier
-        if read_count:
-            payload["read_count"] = read_count
-        payload["replicate"] = enc_replicate_id
-        payload["run_type"] = sreq.paired_end
-        payload["submitted_file_name"] = file_path 
-        # set flowcell_details
-        flowcell_details = {}
-        pulsar_library = models.Library(sres.library_id)
-        flowcell_details["barcode"] = pulsar_library.get_barcode_sequence()
-        flowcell_details["lane"] = srun.lane
-        payload["flowcell_details"] = flowcell_details
-        pulsar_biosample = models.Biosample(pulsar_library.id)
-        if pulsar_biosample
-
-    def download_dx_file(fild_id, file_path):
-        # Download command blocks and returns None.
-        dxpy.download_dxfile(dxid=file_id, filename=file_path, show_progress=True)
+    def get_fsize_and_md5sum(self, file_path):
         fsize = os.path.getsize(file_path)
         md5sum = euu.calculate_md5sum(file_path)
         stats = {}
@@ -584,10 +615,15 @@ class Submit():
         stats["md5sum"] = md5sum
         return stats
 
-    def add_chipseq_controlled_by(pulsar_biosample, read_num):
+    def get_chipseq_controlled_by(self, pulsar_biosample, read_num):
+        """
+        Given a p
+        Returns:
+            `list`: The upstream identifiers for the control file objects on the ENCODE Portal.
+        """
         if pulsar_biosample.control:
-            return {}
-        data = {"controlled_by": []}
+            return []
+        controlled_by = []
         chipseq_experiment = pulsarpy.models.ChipseqExperiment(pulsar_biosample.chipseq_experiment_id)
         # First add pooled input. Normally one control but could be more. 
         ctl_map = chipseq_experiment.paired_input_control_map() 
@@ -595,14 +631,14 @@ class Submit():
             for ctl_id in ctl_map[bio_id]:
                 ctl = pulsarpy.models.Biosample(ctl_id)
                 sres = ctl.get_latest_seqresult(ctl)
-                data["controlled_by"].append(sres.get_upstream_identifier(read_num))
+                controlled_by.append(sres.get_upstream_identifier(read_num))
         # Next add WT input
         wt_input_id = chipseq_experiment.wild_type_control
         if wt_input:
             wt_input = pulsarpy.models.Biosample(wt_input_id)
             sres = wt_input.get_latest_seqresult(wt_input)
-            data["controlled_by"].append(sres.get_upstream_identifier(read_num))
-        return data
+            controlled_by.append(sres.get_upstream_identifier(read_num))
+        return controlled_by
 
         
     def get_barcode_details_for_ssc(self, ssc_id):
