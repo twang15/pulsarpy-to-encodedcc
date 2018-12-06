@@ -525,6 +525,10 @@ class Submit():
         the latest SequencingRun of the latest SequencingRequest. Once this simplicity fails to hold,
         an updated approach will need to be taken. 
 
+        If trying to POST a file that already has an upstream identifier set in the SequencingResult
+        for the given read number, if the patch argument is set to False then a warning will be 
+        sent to STDOUT and the function will return the None object. 
+
         Args:
             pulsar_sres_id: A SequencingResult record in Pulsar. 
             read_num: `int`. being either 1 or 2. Use 1 for the forwrard reads FASTQ file, and 2
@@ -532,6 +536,9 @@ class Submit():
                 of both files (if paired-end sequening).
             end_replicate_id: `str`. The identifier of the DCC replicate record that the file record
                 is to be associated with.
+
+        Returns:
+            `dict`. The response from the encode-utils POST or PATCH operation.
         """
         sres = models.SequencingResult(pulsar_sres_id)
         lib = models.Library(sres.library_id)
@@ -555,10 +562,12 @@ class Submit():
         if read_num == 1:
             payload["paired_end"] = 1
             file_uri = sres.read1_uri
+            upstream_id = sres.read1_upstream_identifier
             read_count = sres.read1_count
         elif read_num == 2:
             payload["paired_end"] = 2
             file_uri = sres.read2_uri
+            upstream_id = sres.read2_upstream_identifier
             read_count = sres.read2_count
             # Need to set paired_with key in the payload. In this case, 
             # it is expected that R1 has been already submitted.
@@ -567,6 +576,13 @@ class Submit():
             payload["paired_with"] = sres.read1_upstream_identifier
         if not file_uri:
             raise NoFastqFile("SequencingResult '{}' for R{read_num} does not have a FASTQ file path set.".format(pulsar_sres_id, read_num))
+        if upstream_id:
+            if not patch:
+               print("Won't POST file for {} for SequencingResult {} with read number {} since it already exists on the Portal (has upstream identifier set).".format(file_uri, pulsar_sres_id, read_num))
+               return 
+        elif not upstream_id and patch:
+            print("Can't PATCH file object on the Portal when the SequencingResult {} for read {} doesn't have an upstream ID set.".format(pulsar_sres_id, read_num))
+
         data_storage = models.DataStorage(srun.data_storage_id)
         data_storage_provider = models.DataStorageProvider(data_storage.data_storage_provider_id)
         # Initialize file_path to be empty string.
@@ -581,19 +597,16 @@ class Submit():
             file_ref = "dnanexus:{file_uri}".format(file_uri)
             payload["aliases"].append(file_ref)
             payload["aliases"].append(os.path.basename(file_path))
+            # md5sum key added to payload by encode-utils.
         elif data_storage_provider == "AWS S3 Bucket":
             file_path = file_uri
-            # Add to payload the keys file_size and md5sum:
-            payload.update(encode_utils.aws_storage.S3Object(s3_uri=file_uri).size_and_md5())
+            # md5sum key added to payload by encode-utils.
             payload["aliases"].append(file_uri) # i.e. s3://bucket-name/key
             payload["aliases"].append(os.path.basename(file_uri))
 
         if not file_path:
             raise Exception("Could not locate FASTQ file for SequencingResult {}; read number {}.".format(pulsar_sres_id, read_num))
         payload["submitted_file_name"] = file_path 
-
-       # Add keys file_size and md5sum to payload
-        payload.update(self.get_fsize_and_md5sum(file_path)
 
         dcc_rep = self.ENC_CONN.get(rec_ids=enc_replicate_id, ignore404=False)
         dcc_exp = dcc_rep["experiment"]
@@ -606,6 +619,27 @@ class Submit():
                 payload["controlled_by"] = controlled_by
         else:
             raise Exception("There isn't yet support to set controlled_by for experiments of type {}.".format(dcc_exp_type))
+        self.post(payload=payload, dcc_profile="file", pulsar_model="", pulsar_rec_id="")
+
+        # POST to ENCODE Portal. Don't use post() method defined here that is a wrapper over 
+        # `encode_utils.connection.Connectionpost`, since the wrapper only works if the record we
+        # are POSTING has a corresponding record type on the Portal. Since Pulsar doesn't have a 
+        # corresponding file model, we can't use the wrapper method. So we'll have to manually 
+        # set the upstream identifier in the attribute `SequencingResult.read1_upstream_identifier`
+        # or `SequencingResult.read2_upstream_identifier`.
+        if patch:
+            payload[self.ENC_CONN.ENCID_KEY] = upstream_id
+            res_json = self.ENC_CONN.patch(payload=payload)
+        else:
+            payload[self.ENC_CONN.PROFILE_KEY] = "file"
+            res_json = self.ENC_CONN.post(payload=payload)
+            accession = res_json["accession"]
+            if read_num == 1:
+                sres.patch({"read1_upstream_accession": accession})
+            else:
+                sres.patch({"read2_upstream_accession": accession})
+        return res_json
+        
 
     def get_fsize_and_md5sum(self, file_path):
         fsize = os.path.getsize(file_path)
