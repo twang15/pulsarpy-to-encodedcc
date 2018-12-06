@@ -23,6 +23,7 @@ Client API Modules
 
    backport_from_encode_portal/backport
    dcc_submit
+   pulsarpy_to_encodedcc
 
 Indices and tables
 ==================

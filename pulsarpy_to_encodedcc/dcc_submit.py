@@ -508,10 +508,13 @@ class Submit():
                 is to be associated with.
         """
         sres = models.SequencingResult(pulsar_sres_id)
+        srun = models.Sequencingrun(sres.sequencing_run_id)
         sreq = models.SequencingRequest(sres.sequencing_request_id)
+        lib = models.Library(sres.library_id)
+        bio = models.Biosample(lib.biosample_id)
         platform = models.Platform(sreq.sequencing_platform_id)
         payload = {}
-        # Need to set md5sum and file_size. 
+        payload["aliases"] = []
         if read_num == 1:
             payload["paired_end"] = 1
             file_uri = sres.read1_uri
@@ -530,26 +533,63 @@ class Submit():
         # Initialize file_path to be empty string.
         file_path = ""
         if data_storage_provider.name == "DNAnexus":
-            # Download file and set file_size and md5sum payload keys
-            dx_file = dxpy.DXFile(dxid=file_uri)
+            dx_file = dxpy.DXFile(dxid=file_id)
             file_path = os.path.join(FASTQ_FOLDER, dx_file.name)
-            # Download command blocks and returns None.
-            dxpy.download_dxfile(dxid=file_uri, filename=file_path, show_progress=True)
-            fsize = os.path.getsize(file_path)
-            md5sum = euu.calculate_md5sum(file_path)
-            payload["file_size"] = fsize
-            payload["md5sum"] = md5sum
+            # Download file and set file_size and md5sum payload keys
+            payload.update(download_dx_file(file_uri, file_path)) 
+            # The above call adds the following keys to the payload:
+            #   1. file_size,
+            #   2. md5sum'
+            file_ref = "dnanexus:{file_uri}".format(file_uri)
+            aliases.extend([dx_file.name, file_ref])
 
         if not file_path:
             raise Exception("Could not locate FASTQ file for SequencingResult {}; read number {}.".format(pulsar_sres_id, read_num))
 
-        file_ref = "dnanexus:{file_uri}".format(file_uri)
-        aliases = [dx_file.name, file_ref]
-        srun = models.Sequencingrun(sres.sequencing_run_id)
         full_path = os.path.join(data_storage.folder_base_path, storage_path, file_uri)
         dcc_rep = self.ENC_CONN.get(rec_ids=enc_replicate_id, ignore404=False)
-        payload["aliases"] = aliases
-        dcc_rep = self.ENC_CONN.get(rec_ids=enc_replicate_id, ignore404=False)
+        dcc_exp = dcc_rep["experiment"]
+        dcc_exp_accession = dcc_exp["accession"]
+        dcc_exp_type = dcc_exp["assay_term_name"] #i.e. ChIP-seq
+        if dcc_exp_type == "ChIP-seq":
+
+            def add_chipseq_controlled_by(pulsar_biosample, read_num):
+                if pulsar_biosample.control:
+                    return {}
+                data = {"controlled_by": []}
+                chipseq_experiment = pulsarpy.models.ChipseqExperiment(pulsar_biosample.chipseq_experiment_id)
+                # First add pooled inputs
+                ctl_map = chipseq_experiment.paired_input_control_map() 
+                if bio_id in ctl_map:
+                    for ctl_id in ctl_map[bio_id]:
+                        ctl = pulsarpy.models.Biosample(ctl_id)
+                        # Get control's SequencingResult's upstream_identifier for given read_num
+                        data["controlled_by"].append(upstream)
+                # Next add WT input
+                wt_input_id = chipseq_experiment.wild_type_control
+                if wt_input:
+                    wt_input = pulsarpy.models.Biosample(wt_input_id)
+                    upstream = wt_input.upstream
+                    if not upstream:
+                        raise Exception("upstream_identifier attribute not set for wild-type control Biosample {}.".format(wt_input_id))
+                    data["controlled_by"].append(upstream)
+                return data
+
+    def get_latest_seqresult(pulsar_biosample):
+        sreq_ids = pulsar_biosample.sequencing_request_ids
+        sreq_ids.sort()
+        latest_sreq_id = sreq_ids[-1]
+        sreq = pulsarpy.models.SequencingRequest(latest_sreq_id)
+        srun_ids = sreq.sequencing_run_ids
+        srun_ids.sort()
+        latest_srun_id = srun_ids[-1]
+        srun = pulsarpy.models.SequencingRun(latest_srun_id)
+        
+           
+               
+        
+        
+        pulsar_exp = 
         payload["file_format"] = "fastq"
         payload["output_type"] = "reads"
         # The Pulsar Platform must already have the upstream_identifier attribute set.
@@ -565,6 +605,19 @@ class Submit():
         flowcell_details["barcode"] = pulsar_library.get_barcode_sequence()
         flowcell_details["lane"] = srun.lane
         payload["flowcell_details"] = flowcell_details
+        pulsar_biosample = models.Biosample(pulsar_library.id)
+        if pulsar_biosample
+
+    def download_dx_file(fild_id, file_path):
+        # Download command blocks and returns None.
+        dxpy.download_dxfile(dxid=file_id, filename=file_path, show_progress=True)
+        fsize = os.path.getsize(file_path)
+        md5sum = euu.calculate_md5sum(file_path)
+        stats = {}
+        stats["file_size"] = fsize
+        stats["md5sum"] = md5sum
+        return stats
+        
         
     def get_barcode_details_for_ssc(self, ssc_id):
         """
