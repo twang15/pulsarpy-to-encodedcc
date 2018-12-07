@@ -9,7 +9,7 @@
 import os
 
 #: The folder where FASTQ files are downloaded. Will be created if it doesn't yet exist.
-FASTQ_FOLDER = "PulsarpyToEncodedcc_FASTQS"
+FASTQ_FOLDER = "PulsarpyToEncodeDcc_FASTQS"
 if not os.path.exists(FASTQ_FOLDER):
     os.mkdir(FASTQ_FOLDER)
 

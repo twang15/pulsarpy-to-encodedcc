@@ -25,12 +25,16 @@ Optional environment variables:
 
 import base64
 import logging
+import os
+
+import dxpy
 
 from pulsarpy_to_encodedcc import FASTQ_FOLDER
 from pulsarpy import models
 import pulsarpy.utils
 import encode_utils as eu
 import encode_utils.aws_storage
+import encode_utils.replicate
 import encode_utils.connection as euc
 import encode_utils.utils as euu
 import pdb
@@ -186,6 +190,18 @@ class Submit():
             pulsar_rec.patch(payload={"upstream_identifier": upstream})
             print("upstream_identifier attribute set successfully.")
         return upstream
+
+    def post_chipseq_exp(self, rec_id, patch=False):
+        exp = models.ChipseqExperiment(rec_id)
+        rep_ids = exp.replicate_ids
+        ctl_ids = exp.control_replicate_ids
+        wt_ctl_id = exp.wild_type_input_control_id
+        # POST experimental biosamples
+        for i in rep_ids:
+            self.post_biosample(rec_id=i, patch=patch)
+        for i in ctl_ids:
+            self.post_biosample(rec_id=i, patch=patch)
+        self.post_biosample(rec_id=wt_ctl_id, patch=patch)
     
     def post_crispr_modification(self, rec_id, patch=False):
         rec = models.CrisprModification(rec_id)
@@ -448,15 +464,19 @@ class Submit():
             res = self.post(payload=payload, dcc_profile="library", pulsar_model=models.Biosample, pulsar_rec_id=rec_id)
         return res
 
-    def post_replicate(self, library_upstream, patch=False):
+    def post_replicate(self, pulsar_library_id, patch=False):
         """
-        Submits a replicated record, linked to the specified library. The associated experiment
+        Submits a replicate record, linked to the specified library. The associated experiment
         record will be determined via the method :func:`pulsarpy.utils.get_exp_of_biosample`.
 
         Todo: Check what value to use for technical_replicate_number. 
+
         Args:
-            library_upstream - The identifier of a Library record on the ENCODE Portal, which is
-                 stored in Pulsar via the upstream_identifier attribute of a Library record.
+            pulsar_library_id: `int`. The ID of a Library record in Pulsar.
+
+        Returns:
+            `dict`: The replicate JSON of the replicate object if it already exists on the Portal,
+                otherwise the replicate JSON of the newly created replicate object.
         """
         # Required fields to submit to a replicate are:
         #  -biological_replicate_number
@@ -464,30 +484,41 @@ class Submit():
         #  -technical_replicate_number
 
         #dcc_lib = self.ENC_CONN.get(ignore404=False, rec_ids=dcc_library_id)       
-        lib = models.Library(upstream=library_upstream)
+        payload = {}
+        lib = models.Library(pulsar_library_id)
+        payload["library"] = lib.upstream_identifier
         biosample_id = lib.biosample_id
         biosample = models.Biosample(biosample_id)
+        pulsar_exp_info = pulsarpy.utils.get_exp_of_biosample(biosample) 
+        pulsar_exp_type = pulsar_exp_info["type"] #i.e. single_cell_sorting or chipseq_experiment
+        pulsar_exp = pulsasr_exp_info["record"]
+        payload["experiment"] = pulsar_exp.upstream_identifier
+        # Check if replicate already exists for this library
+        exp_reps_instance = encode_utils.replicate.ExpReplicates(conn, pulsar_exp.upstream_identifier)
+        rep_json = exp_reps_instance.does_rep_exist(biosample_accession=biosample.upstream_identifier, library_accession=lib.upstream_identifier)
+        if rep_json:
+            return rep_json
+        
         payload = {}
         payload["antibody"] = "ENCAB728YTO" #AB-9 in Pulsar
         #payload["aliases"] = 
         # Set biological_replicate_number and technical_replicate_number. For ssATAC-seq experiments,
         # these two attributes don't really make sense, but they are required to submit, so ...
-        brn = biosample.replicate_number
-        if not brn:
-            # Check if this is a SingleCellSorting.library_prototype - if so, replicate_number isn't
-            # really meaningful in Pulsar for the linked biosample, just default it to 1:
-            if lib.single_cell_sorting_id:
-                brn = 1
-            else:
-               raise Exception("Can't submit replicate object for library '{}' since the associated biosample doesn't have the replicate_number attribute set.".format(library_upstream))
+
+        if not biosample.upstream_identifier in exp_reps_instance.rep_hash:
+            brn = 1
+            trn = 1
+        else:
+            # See how many biosample replicates there currently are:
+            brn = len(exp_reps_instance.rep_hash) + 1
+            while exp_reps_instance.does_brn_exist(brn):
+                brn += 1
+            trn = len(exp_reps_instance.rep_hash[biosample.upstream_identifier]) + 1
+            while exp_reps_instance.does_trn_exist(brn=brn, trn=trn):
+                trn += 1
+            
         payload["biological_replicate_number"] = brn
-        payload["technical_replicate_number"] = 1
-        # Figure out the experiment that this Biosample is associated to
-        exp_rec = pulsarpy.utils.get_exp_of_biosample(biosample)
-        if not exp_rec.upstream_identifier:
-            raise Exception("Can't submit replicate when the experiment it is linked to hasn't been submitted.")
-        payload["experiment"] = experiment_upstream
-        payload["library"] = library_upstream
+        payload["technical_replicate_number"] = trn
         # Submit payload
         if patch:  
             res = self.ENC_CONN.patch(payload=payload, extend_array_values=self.extend_arrays)
@@ -543,14 +574,14 @@ class Submit():
         sres = models.SequencingResult(pulsar_sres_id)
         lib = models.Library(sres.library_id)
         bio = models.Biosample(lib.biosample_id)
-        srun = models.Sequencingrun(sres.sequencing_run_id)
+        srun = models.SequencingRun(sres.sequencing_run_id)
         sreq = models.SequencingRequest(srun.sequencing_request_id)
-        platform = models.Platform(sreq.sequencing_platform_id)
+        platform = models.SequencingPlatform(sreq.sequencing_platform_id)
         payload = {}
         payload["aliases"] = []
         payload["file_format"] = "fastq"
         payload["output_type"] = "reads"
-        # The Pulsar Platform must already have the upstream_identifier attribute set.
+        # The Pulsar SequencingPlatform must already have the upstream_identifier attribute set.
         payload["platform"] = platform.upstream_identifier
         # set flowcell_details
         flowcell_details = {}
@@ -594,7 +625,7 @@ class Submit():
             if not os.path.exists(file_path) or not os.path.getsize(file_path):
                 # Download file.
                 dxpy.download_dxfile(dxid=file_uri, filename=file_path, show_progress=True)
-            file_ref = "dnanexus:{file_uri}".format(file_uri)
+            file_ref = "dnanexus:{}".format(file_uri)
             payload["aliases"].append(file_ref)
             payload["aliases"].append(os.path.basename(file_path))
             # md5sum key added to payload by encode-utils.
@@ -746,3 +777,4 @@ class Submit():
                 storage_loc_id = run.storage_location_id
                 sres_ids = run.sequencing_result_ids
                 # Submit a file record
+
