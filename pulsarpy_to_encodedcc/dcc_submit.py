@@ -121,8 +121,11 @@ class Submit():
         return txt.replace("/","-")
                   
 
-    #def patch(self, payload, raise_403=True, extend_array_values=False):
-         # Just use self.ENC_CONN.patch() directly.
+    def patch(self, payload, upstream_id)
+        payload[self.ENC_CONN.ENCID_KEY] = upstream_id
+        res_json = self.ENC_CONN.patch(payload=payload, extend_array_values=self.extend_arrays
+        return
+
 
 
     def post(self, payload, dcc_profile, pulsar_model, pulsar_rec_id):
@@ -191,12 +194,61 @@ class Submit():
             print("upstream_identifier attribute set successfully.")
         return upstream
 
+    def get_biosample_term_name_and_type(first_biosample):
+        """
+        Args:
+            biosample: `pulsarpy.models.Biosample` instance.
+        """
+        res = {} 
+        biosample_term_name = models.BiosampleTermName(biosample.biosample_term_name_id)
+        res["biosample_term_name"] = biosample_term_name.name
+        biosample_type = models.BiosampleType(biosample.biosample_type_id)
+        res["biosample_type"] = biosample_type.name
+        return res
+
+    def post_ctl_exp(self, biosample_ids, payload):
+        """
+        Args:
+            biosample_ids: `list` of Pulsar Biosample IDs that belong to the control experiment 
+                as replicates.
+            payload: `dict`. The keys for the following DCC experiment properties:
+
+                - assay_term_name
+                - biosample_term_name
+                - biosample_type
+                - documents
+                - experiment_classification
+                - submitter_comment
+        """
+        payload["description"] = "ChIP-seq on human " + payload["biosample_term_name"]
+        payload["target"] = "Control-human"
+        # Before POSTING experiment, check if it already exists on the Portal.
+        # POST experiment
+        dcc_exp_json = self.ENC_CONN.post(payload=payload, dcc_profile="experiment")
+        dcc_exp_upstream = dcc_exp_json["accession"]
+        ctl_ids = exp.control_replicate_ids
+
     def post_chipseq_exp(self, rec_id, patch=False):
         exp = models.ChipseqExperiment(rec_id)
+        payload = {}
+        payload["assay_term_name"] = "ChIP-seq"
         rep_ids = exp.replicate_ids
+        first_rep = models.Biosample(rep_ids[0])
+        # Add biosample_term_name and biosample_type props
+        payload.update(self.get_biosample_term_name_and_type(first_rep))
+
+        payload["documents"] = self.post_documents(exp.document_ids)
+        payload["experiment_classification"] = "functional genomics assay"
+        payload["submitter_comment"] = exp.submitter_comments.strip()
+        target = models.Target(exp.target_id)
+        payload["target"] = target.upstream_identifier
+        #payload["description"] = exp.description.strip()
+        payload["description"] = target.upstream_identifier.rstrip('-human') + ' ChIP-seq on human ' + payload["biosample_term_name"]
+        # POST experiment
+        dcc_exp_id = self.post(payload=payload, dcc_profile="experiment", pulsar_model="ChipseqExperiment", pulsar_rec_id=rec_id)
         ctl_ids = exp.control_replicate_ids
         wt_ctl_id = exp.wild_type_input_control_id
-        # POST experimental biosamples
+        # POST experimental biosampes
         for i in rep_ids:
             self.post_biosample(rec_id=i, patch=patch)
         for i in ctl_ids:
@@ -255,7 +307,7 @@ class Submit():
         # ex: ENCGM094ZOS
 
         if patch: 
-            res = self.ENC_CONN.patch(payload=payload, extend_array_values=self.extend_arrays)
+            res = self.patch(payload=payload, upstream_id=rec.upstream_identifier)
         else:
             res = self.post(payload=payload, dcc_profile="genetic_modification", pulsar_model=models.CrisprModification, pulsar_rec_id=rec_id)
             return res
@@ -278,7 +330,7 @@ class Submit():
         attachment["href"] = href
         payload["attachment"] = attachment
         if patch:
-            res = self.ENC_CONN.patch(payload=payload, extend_array_values=self.extend_arrays)
+            res = self.patch(payload, rec.upstream_identifier)
         else:
             res = self.post(payload=payload, dcc_profile="document", pulsar_model=models.Document, pulsar_rec_id=rec_id)
         return res
@@ -318,7 +370,7 @@ class Submit():
         payload["documents"] = self.post_documents(rec.document_ids)
         # Submit
         if patch:
-            res = self.ENC_CONN.patch(payload=payload, extend_array_values=self.extend_arrays)
+            res = self.patch(pyaload, rec.upstream_identifier)
         else:
             res = self.post(payload=payload, dcc_profile="treatment", pulsar_model=models.Treatment, pulsar_rec_id=rec_id)
         return res
@@ -423,7 +475,7 @@ class Submit():
         payload["treatments"] = self.post_treatments(rec.treatment_ids)
    
         if patch:  
-            res = self.ENC_CONN.patch(payload=payload, extend_array_values=self.extend_arrays)
+            res = self.patch(payload, rec.upstream_identifier)
         else:
             res = self.post(payload=payload, dcc_profile="biosample", pulsar_model=models.Biosample, pulsar_rec_id=rec_id)
         return res
@@ -459,7 +511,7 @@ class Submit():
 
         # Submit payload
         if patch:  
-            res = self.ENC_CONN.patch(payload=payload, extend_array_values=self.extend_arrays)
+            res = self.patch(payload, rec.upstream_identifier)
         else:
             res = self.post(payload=payload, dcc_profile="library", pulsar_model=models.Biosample, pulsar_rec_id=rec_id)
         return res
@@ -468,8 +520,6 @@ class Submit():
         """
         Submits a replicate record, linked to the specified library. The associated experiment
         record will be determined via the method :func:`pulsarpy.utils.get_exp_of_biosample`.
-
-        Todo: Check what value to use for technical_replicate_number. 
 
         Args:
             pulsar_library_id: `int`. The ID of a Library record in Pulsar.
@@ -494,9 +544,9 @@ class Submit():
         pulsar_exp = pulsasr_exp_info["record"]
         payload["experiment"] = pulsar_exp.upstream_identifier
         # Check if replicate already exists for this library
-        exp_reps_instance = encode_utils.replicate.ExpReplicates(conn, pulsar_exp.upstream_identifier)
-        rep_json = exp_reps_instance.does_rep_exist(biosample_accession=biosample.upstream_identifier, library_accession=lib.upstream_identifier)
-        if rep_json:
+        exp_reps_instance = encode_utils.replicate.ExpReplicates(self.ENC_CONN, pulsar_exp.upstream_identifier)
+        rep_json = exp_reps_instance.get_rep(biosample_accession=biosample.upstream_identifier, library_accession=lib.upstream_identifier)
+        if rep_json and not patch:
             return rep_json
         
         payload = {}
@@ -509,19 +559,13 @@ class Submit():
             brn = 1
             trn = 1
         else:
-            # See how many biosample replicates there currently are:
-            brn = len(exp_reps_instance.rep_hash) + 1
-            while exp_reps_instance.does_brn_exist(brn):
-                brn += 1
-            trn = len(exp_reps_instance.rep_hash[biosample.upstream_identifier]) + 1
-            while exp_reps_instance.does_trn_exist(brn=brn, trn=trn):
-                trn += 1
+            brn, trn = exp_reps_instance.suggest_brn_trn(biosample.upstream_identifier)
             
         payload["biological_replicate_number"] = brn
         payload["technical_replicate_number"] = trn
         # Submit payload
         if patch:  
-            res = self.ENC_CONN.patch(payload=payload, extend_array_values=self.extend_arrays)
+            res = self.patch(payload, rep_json.upstream_identifier)
         else:
             res = self.post(payload=payload, dcc_profile="replicate", pulsar_model=models.Biosample, pulsar_rec_id=rec_id)
         return res
@@ -650,7 +694,6 @@ class Submit():
                 payload["controlled_by"] = controlled_by
         else:
             raise Exception("There isn't yet support to set controlled_by for experiments of type {}.".format(dcc_exp_type))
-        self.post(payload=payload, dcc_profile="file", pulsar_model="", pulsar_rec_id="")
 
         # POST to ENCODE Portal. Don't use post() method defined here that is a wrapper over 
         # `encode_utils.connection.Connectionpost`, since the wrapper only works if the record we
