@@ -121,12 +121,17 @@ class Submit():
         return txt.replace("/","-")
                   
 
-    def patch(self, payload, upstream_id)
+    def patch(self, payload, upstream_id):
+        """
+        A wrapper over `encode_utils.connection.Connection.patch()`.
+
+        Returns:
+            `dict`: The JSON response from the PATCH operation, or an empty dict if the record doesn't
+                exist on the Portal.  See ``encode_utils.connection.Connection.patch()`` for more details.
+        """
         payload[self.ENC_CONN.ENCID_KEY] = upstream_id
-        res_json = self.ENC_CONN.patch(payload=payload, extend_array_values=self.extend_arrays
-        return
-
-
+        response_json = self.ENC_CONN.patch(payload=payload, extend_array_values=self.extend_arrays)
+        return response_json 
 
     def post(self, payload, dcc_profile, pulsar_model, pulsar_rec_id):
         """
@@ -152,10 +157,8 @@ class Submit():
             pulsar_rec_id: `str`. The identifier of the Pulsar record to POST to the DCC.
         Returns:
             `str`: The upstream identifier for the new record on the ENCODE Portal, or the existing
-            upstream identifier if the record already exists. The identifier of either the new record 
-            or existing record on the ENCODE Portal is determined to be the 'accession' if that property is present, 
-            otherwise it's the first alias if the 'aliases' property is present, otherwise its 
-            the value of 'uuid' property.
+            upstream identifier if the record already exists; see ``encode_utils.utils.extract_encode_rec_upstream()``
+            for more details. 
         """
         payload[self.ENC_CONN.PROFILE_KEY] = dcc_profile
         rec = pulsar_model(pulsar_rec_id)
@@ -179,12 +182,7 @@ class Submit():
         # record JSON itself if it does already exist. Note that the dict. will be empty if the connection
         # object to the ENCODE Portal has the dry-run feature turned on.
         response_json = self.ENC_CONN.post(payload)
-        if "accession" in response_json:
-            upstream = response_json["accession"]
-        elif "aliases" in response_json:
-            upstream = response_json["aliases"][0]
-        else:
-            upstream = response_json["uuid"]
+        upstream = euu.extract_encode_rec_upstream(response_json)
         # Set value of the Pulsar record's upstream_identifier, but only if we are in prod mode since
         # we don't want to set it to an upstream identifiers from any of the ENOCODE Portal test servers. 
         if self.dcc_mode == eu.DCC_PROD_MODE:
@@ -226,7 +224,41 @@ class Submit():
         # POST experiment
         dcc_exp_json = self.ENC_CONN.post(payload=payload, dcc_profile="experiment")
         dcc_exp_upstream = dcc_exp_json["accession"]
+        for b in biosample_ids:
+            self.post_biosample_through_fastq(biosample_id=b)
         ctl_ids = exp.control_replicate_ids
+        return dcc_exp_upstream
+
+    def post_sres(self, pulsar_sres_id, enc_replicate_id):
+        """
+        A wrapper over ``self.post_fastq_file()``.  Whereas ``self.post_fastq_file()`` only 
+        uploads the FASTQ file for the given read number, this method calls ``self.post_fastq_file()``
+        twice potentially, once for each FASTQ file in the Pulsar SequencingResult. Thus,
+        if paired-end sequencing was done, ``self.post_fastq_file()`` will be called twice to upload
+        the forward and reverse reads FASTQ files. 
+        """
+        sres = models.SequencingResult(pulsar_sres_id)
+        sreq = models.SequencingRequest.sres.sequencing_request_id)
+        self.post_fastq_file(pulsar_sres_id=sres.id, read_num=1, enc_replicate_id=enc_replicate_id)
+        if not sreq.paired_end and sres.read2_uri:
+            sres.patch({"paired_end": True})
+        if sreq.paired_end:
+            # Submit read2
+            self.post_fastq_file(pulsar_sres_id=sres.id, read_num=2, enc_replicate_id=enc_replicate_id)
+
+    def post_biosample_through_fastq(self, biosample_id):
+        biosample = models.Biosample(biosample_id)
+        seqres = biosample.get_latest_seqresult()
+        library_id = seqres.library_id
+        biosample_upstream = self.post_biosample(rec_id=b)
+        # POST biosample record
+        pulsar_biosample = models.Biosample(b)
+        # POST library record
+        library_upstream = self.post_library(library_id)
+        # POST replicate record
+        replicate_upstream = self.post_replicate(pulsar_library_id=library_id)
+        # POST file records
+        self.post_sres(pulsar_sres_id=seqres.id, enc_replicate_id=replicate_upstream)
 
     def post_chipseq_exp(self, rec_id, patch=False):
         exp = models.ChipseqExperiment(rec_id)
@@ -345,7 +377,7 @@ class Submit():
         upstreams = []
         for i in rec_ids:
             upstreams.append(self.post_treatment(rec_id=i, patch=patch))
-        return upstream
+        return upstreams
 
     def post_treatment(self, rec_id, patch=False):
         rec = models.Treatment(rec_id)
@@ -484,15 +516,13 @@ class Submit():
         """
         This method will check whether the biosample associated to this library is submitted. If it
         isn't, it will first submit the biosample. 
-
-        Args:
         """
         rec = models.Library(rec_id)
         payload = {}
         biosample = models.Biosample(rec.biosample_id)
         # If this Library record is a SingleCellSorting.library_prototype, then the Biosample it will
         # be linked to is the SingleCellSorting.sorting_biosample.
-        payload["biosample"] = self.post_biosample(rec_id=rec.biosample_id, patch=False)
+        payload["biosample"] = biosample.upstream_identifier
         payload["documents"] = self.post_documents(rec.document_ids)
         fragmentation_method_id = rec.library_fragmentation_method_id
         if fragmentation_method_id:
@@ -503,7 +533,7 @@ class Submit():
         payload["product_id"] = rec.vendor_product_identifier
         payload["size_range"] = rec.size_range
         payload["strand_specificity"] = rec.strand_specific
-        payload["source"] = self.post_vendor(rec_id=rec.vendor_id, patch=False)
+        payload["source"] = models.Vedor(rec.vendor_id).upstream_identifier
         ssc_id = rec.single_cell_sorting_id
         if ssc_id:
            barcode_details = self.get_barcode_details_for_ssc(ssc_id=ssc_id)
@@ -513,13 +543,20 @@ class Submit():
         if patch:  
             res = self.patch(payload, rec.upstream_identifier)
         else:
-            res = self.post(payload=payload, dcc_profile="library", pulsar_model=models.Biosample, pulsar_rec_id=rec_id)
+            res = self.post(payload=payload, dcc_profile="library", pulsar_model=models.Library, pulsar_rec_id=rec_id)
         return res
 
     def post_replicate(self, pulsar_library_id, patch=False):
         """
         Submits a replicate record, linked to the specified library. The associated experiment
         record will be determined via the method :func:`pulsarpy.utils.get_exp_of_biosample`.
+        First, replicates on the experiment associated to the biosample (linked to the Library)
+        will be searched to see if a replicate already exists for a specifc biosample and library
+        combination, and if so then that repicate's JSON from the ENCODE Portal is returned.
+
+        If the associated experiment is ChIP-seq, then the replicate will be submitted with a link 
+        to antibody ENCAB728YTO (AB-9 in Pulsar), which is the GFP-specific antibody used to pull
+        down GFP-tagged TFs. 
 
         Args:
             pulsar_library_id: `int`. The ID of a Library record in Pulsar.
@@ -550,7 +587,8 @@ class Submit():
             return rep_json
         
         payload = {}
-        payload["antibody"] = "ENCAB728YTO" #AB-9 in Pulsar
+        if pulsar_exp_type == "chipseq_experiment":
+            payload["antibody"] = "ENCAB728YTO" #AB-9 in Pulsar
         #payload["aliases"] = 
         # Set biological_replicate_number and technical_replicate_number. For ssATAC-seq experiments,
         # these two attributes don't really make sense, but they are required to submit, so ...
@@ -565,11 +603,16 @@ class Submit():
         payload["technical_replicate_number"] = trn
         # Submit payload
         if patch:  
-            res = self.patch(payload, rep_json.upstream_identifier)
+            return self.patch(payload, rep_json.upstream_identifier)
         else:
-            res = self.post(payload=payload, dcc_profile="replicate", pulsar_model=models.Biosample, pulsar_rec_id=rec_id)
-        return res
-        #return payload
+            # POST to ENCODE Portal. Don't use post() method defined here that is a wrapper over 
+            # `encode_utils.connection.Connection.post`, since the wrapper only works if the record we
+            # are POSTING has a corresponding record type on the Portal. Since Pulsar doesn't have a 
+            # corresponding replicate model, we can't use the wrapper method. 
+            payload[self.ENC_CONN.PROFILE_KEY] = "replicate"
+            res_json = self.ENC_CONN.post(payload=payload)
+            accession = res_json["accession"]
+            return accession
 
     def post_fastq_file(self, pulsar_sres_id, read_num, enc_replicate_id, patch=False):
         """
@@ -696,14 +739,13 @@ class Submit():
             raise Exception("There isn't yet support to set controlled_by for experiments of type {}.".format(dcc_exp_type))
 
         # POST to ENCODE Portal. Don't use post() method defined here that is a wrapper over 
-        # `encode_utils.connection.Connectionpost`, since the wrapper only works if the record we
+        # `encode_utils.connection.Connection.post`, since the wrapper only works if the record we
         # are POSTING has a corresponding record type on the Portal. Since Pulsar doesn't have a 
         # corresponding file model, we can't use the wrapper method. So we'll have to manually 
         # set the upstream identifier in the attribute `SequencingResult.read1_upstream_identifier`
         # or `SequencingResult.read2_upstream_identifier`.
         if patch:
-            payload[self.ENC_CONN.ENCID_KEY] = upstream_id
-            res_json = self.ENC_CONN.patch(payload=payload)
+            res_json = self.patch(payload=payload, upstream_id=upstream_id)
         else:
             payload[self.ENC_CONN.PROFILE_KEY] = "file"
             res_json = self.ENC_CONN.post(payload=payload)
