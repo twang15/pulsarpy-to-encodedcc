@@ -247,18 +247,21 @@ class Submit():
             self.post_fastq_file(pulsar_sres_id=sres.id, read_num=2, enc_replicate_id=enc_replicate_id)
 
     def post_biosample_through_fastq(self, biosample_id):
-        biosample = models.Biosample(biosample_id)
-        seqres = biosample.get_latest_seqresult()
-        library_id = seqres.library_id
-        biosample_upstream = self.post_biosample(rec_id=b)
+        """
+        POSTS the Biosample, it's latest Library, and all SequencingResults for that Library.
+        """
         # POST biosample record
-        pulsar_biosample = models.Biosample(b)
+        biosample_upstream = self.post_biosample(biosample_id)
+        biosample = models.Biosample(biosample_id)
         # POST library record
-        library_upstream = self.post_library(library_id)
+        library = biosample.get_latest_library()
+        library_upstream = self.post_library(library.id)
         # POST replicate record
         replicate_upstream = self.post_replicate(pulsar_library_id=library_id)
-        # POST file records
-        self.post_sres(pulsar_sres_id=seqres.id, enc_replicate_id=replicate_upstream)
+        # POST file records for all sequencing results for the Library
+        sres_ids = library.sequencing_result_ids
+        for i in sres_ids:
+            self.post_sres(pulsar_sres_id=i, enc_replicate_id=replicate_upstream)
 
     def post_chipseq_exp(self, rec_id, patch=False):
         exp = models.ChipseqExperiment(rec_id)
@@ -541,10 +544,11 @@ class Submit():
 
         # Submit payload
         if patch:  
-            res = self.patch(payload, rec.upstream_identifier)
+            res_json = self.patch(payload, rec.upstream_identifier)
+            return res_json
         else:
-            res = self.post(payload=payload, dcc_profile="library", pulsar_model=models.Library, pulsar_rec_id=rec_id)
-        return res
+            library_upstream = self.post(payload=payload, dcc_profile="library", pulsar_model=models.Library, pulsar_rec_id=rec_id)
+            return library_upstream
 
     def post_replicate(self, pulsar_library_id, patch=False):
         """
@@ -676,7 +680,11 @@ class Submit():
         flowcell_details["lane"] = srun.lane
         payload["flowcell_details"] = flowcell_details
         payload["replicate"] = enc_replicate_id
-        payload["run_type"] = sreq.paired_end
+        #if sreq.paired_end:
+        #    payload["run_type"] = "paired-ended"
+        #else:
+        #    payload["run_type"] = "single-ended"
+        payload["run_type"] = "paired-ended"
         if read_num == 1:
             payload["paired_end"] = 1
             file_uri = sres.read1_uri
@@ -697,7 +705,7 @@ class Submit():
         if upstream_id:
             if not patch:
                print("Won't POST file for {} for SequencingResult {} with read number {} since it already exists on the Portal (has upstream identifier set).".format(file_uri, pulsar_sres_id, read_num))
-               return 
+               return upstream_id
         elif not upstream_id and patch:
             print("Can't PATCH file object on the Portal when the SequencingResult {} for read {} doesn't have an upstream ID set.".format(pulsar_sres_id, read_num))
 
@@ -754,7 +762,7 @@ class Submit():
                 sres.patch({"read1_upstream_accession": accession})
             else:
                 sres.patch({"read2_upstream_accession": accession})
-        return res_json
+        return res_json["accession"]
         
 
     def get_fsize_and_md5sum(self, file_path):
@@ -780,17 +788,31 @@ class Submit():
         if bio_id in ctl_map:
             for ctl_id in ctl_map[bio_id]:
                 ctl = pulsarpy.models.Biosample(ctl_id)
-                sres = ctl.get_latest_seqresult(ctl)
-                controlled_by.append(sres.get_upstream_identifier(read_num))
+                lib = ctl.get_latest_library()
+                controlled_by.extend(self.get_all_seqresult_fastq_file_accessions(lib)[read_num])
         # Next add WT input
         wt_input_id = chipseq_experiment.wild_type_control
         if wt_input:
             wt_input = pulsarpy.models.Biosample(wt_input_id)
-            sres = wt_input.get_latest_seqresult(wt_input)
-            controlled_by.append(sres.get_upstream_identifier(read_num))
+            lib = wt_input.get_latest_library()
+            controlled_by.extend(self.get_all_seqresult_fastq_file_accessions(lib)[read_num])
         return controlled_by
 
-        
+    def get_all_seqresult_fastq_file_accessions(pulsar_lib):
+        res = {1: [], 2: []}
+        sequencing_result_ids = pulsar_lib.sequencing_result_ids
+        for sres_id in sequencing_result_ids:
+            sres = pulsarpy.models.SequencingResult(sres_id)
+            r1_accession = sres.get_upstream_identifier(read_num=1))
+            if not r1_accession:
+                raise Exception("Upstream identifier not set for SequencingResult {}, read number {}.".format(sres_id, 1))
+            res[1].append(r1_accession)
+            r2_accession = sres.get_upstream_identifier(read_num=2))
+            if not r2_accession:
+                raise Exception("Upstream identifier not set for SequencingResult {}, read number {}.".format(sres_id, 2))
+            res[2].append(r2_accession)
+        return res
+
     def get_barcode_details_for_ssc(self, ssc_id):
         """
         This purpose of this method is to provide a value to the library.barcode_details property
