@@ -204,31 +204,6 @@ class Submit():
         res["biosample_type"] = biosample_type.name
         return res
 
-    def post_ctl_exp(self, biosample_ids, payload):
-        """
-        Args:
-            biosample_ids: `list` of Pulsar Biosample IDs that belong to the control experiment 
-                as replicates.
-            payload: `dict`. The keys for the following DCC experiment properties:
-
-                - assay_term_name
-                - biosample_term_name
-                - biosample_type
-                - documents
-                - experiment_classification
-                - submitter_comment
-        """
-        payload["description"] = "ChIP-seq on human " + payload["biosample_term_name"]
-        payload["target"] = "Control-human"
-        # Before POSTING experiment, check if it already exists on the Portal.
-        # POST experiment
-        dcc_exp_json = self.ENC_CONN.post(payload=payload, dcc_profile="experiment")
-        dcc_exp_upstream = dcc_exp_json["accession"]
-        for b in biosample_ids:
-            self.post_biosample_through_fastq(biosample_id=b)
-        ctl_ids = exp.control_replicate_ids
-        return dcc_exp_upstream
-
     def post_sres(self, pulsar_sres_id, enc_replicate_id):
         """
         A wrapper over ``self.post_fastq_file()``.  Whereas ``self.post_fastq_file()`` only 
@@ -246,35 +221,65 @@ class Submit():
             # Submit read2
             self.post_fastq_file(pulsar_sres_id=sres.id, read_num=2, enc_replicate_id=enc_replicate_id)
 
-    def post_biosample_through_fastq(self, biosample_id):
+    def post_biosample_through_fastq(self, pulsar_biosample_id, pulsar_exp_model, pulsar_exp_id):
         """
         POSTS the Biosample, it's latest Library, and all SequencingResults for that Library.
+
+        Args:
+            pulsar_biosample_id: `int`. The ID of a Pulsar Biosample record.
+            pulsar_exp_model: `str`. The model name (class) of the Pulsar eperiment (i.e ChipseqExperiment,
+                SinglecellSorting, AtacSeq).
+            pulsar_exp_id: `int`. The ID of a record of the Pulsar model given by pulsar_exp_model.
         """
         # POST biosample record
-        biosample_upstream = self.post_biosample(biosample_id)
-        biosample = models.Biosample(biosample_id)
+        biosample_upstream = self.post_biosample(pulsar_biosample_id)
+        biosample = models.Biosample(pulsar_biosample_id)
         # POST library record
         library = biosample.get_latest_library()
-        library_upstream = self.post_library(library.id)
         # POST replicate record
-        replicate_upstream = self.post_replicate(pulsar_library_id=library_id)
+        replicate_upstream = self.post_replicate(pulsar_library_id=library.id, pulsar_exp_model=pulsar_exp_model, pulsar_exp_id=pulsar_exp_id)
         # POST file records for all sequencing results for the Library
         sres_ids = library.sequencing_result_ids
         for i in sres_ids:
             self.post_sres(pulsar_sres_id=i, enc_replicate_id=replicate_upstream)
 
+    def post_chipseq_pi_ctl_exp(self, rec_id, patch=False):
+        """
+        Given the record ID of a Pulsar ChipseqExperiment, this method is used to submit a control
+        experiment record on the ENCODE Portal for the paired-input control biosamples. 
+
+        Args:
+            rec_id: `int`. ID of a ChipseqExperiment record in Pulsar.
+            biosample_ids: `list` of Pulsar Biosample IDs that belong to the control experiment 
+                as replicates.
+            payload: `dict`. The keys for the following DCC experiment properties:
+        """
+        exp = models.ChipseqExperiment(rec_id)
+        payload = {}
+        payload.upate(self.get_chipseq_exp_core_payload_props(pulsar_exp_json=exp))
+        payload["description"] = "ChIP-seq on human " + payload["biosample_term_name"]
+        payload["target"] = "Control-human"
+  
+        # Before POSTING experiment, check if it already exists on the Portal.
+        # POST experiment. Don't use self.post() since there isn't a Pulsar model for a control experiment.
+        # So, use encode-utils directly to POST.
+        if patch:
+            res_json = self.patch(payload=payload, upstream_id=rec_id):
+        else:
+            payload[self.ENC_CONN.PROFILE_KEY] = "replicate"
+            res_json = self.ENC_CONN.post(payload=payload)
+        ctl_exp_accession = res_json["accession"]
+
+        paired_input_ids = exp.control_replicate_ids # Biosample records.
+        for b in paired_input_ids:
+            self.post_biosample_through_fastq(biosample_id=b)
+        ctl_ids = exp.control_replicate_ids
+        return dcc_exp_upstream
+
     def post_chipseq_exp(self, rec_id, patch=False):
         exp = models.ChipseqExperiment(rec_id)
         payload = {}
-        payload["assay_term_name"] = "ChIP-seq"
-        rep_ids = exp.replicate_ids
-        first_rep = models.Biosample(rep_ids[0])
-        # Add biosample_term_name and biosample_type props
-        payload.update(self.get_biosample_term_name_and_type(first_rep))
-
-        payload["documents"] = self.post_documents(exp.document_ids)
-        payload["experiment_classification"] = "functional genomics assay"
-        payload["submitter_comment"] = exp.submitter_comments.strip()
+        payload.upate(self.get_chipseq_exp_core_payload_props(pulsar_exp_json=exp))
         target = models.Target(exp.target_id)
         payload["target"] = target.upstream_identifier
         #payload["description"] = exp.description.strip()
@@ -284,11 +289,23 @@ class Submit():
         ctl_ids = exp.control_replicate_ids
         wt_ctl_id = exp.wild_type_input_control_id
         # POST experimental biosampes
+        rep_ids = exp.replicate_ids
         for i in rep_ids:
             self.post_biosample(rec_id=i, patch=patch)
         for i in ctl_ids:
             self.post_biosample(rec_id=i, patch=patch)
         self.post_biosample(rec_id=wt_ctl_id, patch=patch)
+
+    def get_chipseq_exp_core_payload_props(self, pulsar_exp_json):
+        payload = {}
+        first_rep = models.Biosample(rep_ids[0])
+        # Add biosample_term_name and biosample_type props
+        payload.update(self.get_biosample_term_name_and_type(first_rep))
+        payload["assay_term_name"] = "ChIP-seq"
+        payload["documents"] = self.post_documents(pulsar_exp_json.document_ids)
+        payload["experiment_classification"] = "functional genomics assay"
+        payload["submitter_comment"] = pulsar_exp_json.submitter_comments.strip()
+        return payload
     
     def post_crispr_modification(self, rec_id, patch=False):
         rec = models.CrisprModification(rec_id)
@@ -550,13 +567,12 @@ class Submit():
             library_upstream = self.post(payload=payload, dcc_profile="library", pulsar_model=models.Library, pulsar_rec_id=rec_id)
             return library_upstream
 
-    def post_replicate(self, pulsar_library_id, patch=False):
+    def post_replicate(self, pulsar_library_id, pulsar_exp_model, pulsar_exp_id, patch=False):
         """
-        Submits a replicate record, linked to the specified library. The associated experiment
-        record will be determined via the method :func:`pulsarpy.utils.get_exp_of_biosample`.
-        First, replicates on the experiment associated to the biosample (linked to the Library)
-        will be searched to see if a replicate already exists for a specifc biosample and library
-        combination, and if so then that repicate's JSON from the ENCODE Portal is returned.
+        Submits a replicate record, linked to the specified library and experiment. 
+        First, replicates on the experiment will be searched to see if a replicate already exists 
+        for a specifc biosample and library combination, and if so then that repicate's JSON from 
+        the ENCODE Portal is returned.
 
         If the associated experiment is ChIP-seq, then the replicate will be submitted with a link 
         to antibody ENCAB728YTO (AB-9 in Pulsar), which is the GFP-specific antibody used to pull
@@ -564,6 +580,9 @@ class Submit():
 
         Args:
             pulsar_library_id: `int`. The ID of a Library record in Pulsar.
+            pulsar_exp_model: `str`. The model name (class) of the Pulsar eperiment (i.e ChipseqExperiment,
+                SinglecellSorting, AtacSeq).
+            pulsar_exp_id: `int`. The ID of a record of the Pulsar model given by pulsar_exp_model.
 
         Returns:
             `dict`: The replicate JSON of the replicate object if it already exists on the Portal,
@@ -580,9 +599,9 @@ class Submit():
         payload["library"] = lib.upstream_identifier
         biosample_id = lib.biosample_id
         biosample = models.Biosample(biosample_id)
-        pulsar_exp_info = pulsarpy.utils.get_exp_of_biosample(biosample) 
-        pulsar_exp_type = pulsar_exp_info["type"] #i.e. single_cell_sorting or chipseq_experiment
-        pulsar_exp = pulsasr_exp_info["record"]
+        
+        pulsar_exp_model = getattr(pulsarpy.models, pulsar_exp_model)
+        pulsar_exp = pulsar_exp_model(pulsar_exp_id)
         payload["experiment"] = pulsar_exp.upstream_identifier
         # Check if replicate already exists for this library
         exp_reps_instance = encode_utils.replicate.ExpReplicates(self.ENC_CONN, pulsar_exp.upstream_identifier)
@@ -591,7 +610,7 @@ class Submit():
             return rep_json
         
         payload = {}
-        if pulsar_exp_type == "chipseq_experiment":
+        if pulsar_exp_type == "ChipseqExperiment":
             payload["antibody"] = "ENCAB728YTO" #AB-9 in Pulsar
         #payload["aliases"] = 
         # Set biological_replicate_number and technical_replicate_number. For ssATAC-seq experiments,
