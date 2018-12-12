@@ -307,9 +307,9 @@ class Submit():
             # Normally there will only be one paired_input control Biosample, but there could at times
             # be another. That happens when one of the reps fail, and another rep has to be made from a
             # different cell batch than the sibling rep on the experiment.
-            input_ids = exp.control_replicate_ids # Biosample records.
+            input_ids.extend(exp.control_replicate_ids) # Biosample records.
         inputs = [models.Biosample(x) for x in input_ids]
-        for i in inputs
+        for i in inputs:
             exp = self.check_if_biosample_has_exp_on_portal(i.upstream_identifier)
             if exp and not patch:
                 return exp["accession"]
@@ -344,8 +344,28 @@ class Submit():
         ctl_ids = exp.control_replicate_ids
         return ctl_exp_accession
 
-    def post_chipseq_exp(self, rec_id, patch=False):
+    def post_chipseq_exp(self, rec_id, exp_only=False, patch=False):
+        """
+        Args:
+            rec_id: `int`. ID of a ChipseqExperiment record in Pulsar.
+            exp_only: `bool`. Only makes sense to use when the `patch` parameter is set to True.
+                When `exp_only=True`, then don't PATCH Biosample records and everything downstream
+                to the file records on the Portal (don't call `self.post_biosample_through_fastq()`).
+
+        Returns:
+            `str`: The ENCODE Portal accession of the control experiment. 
+
+        Raises:
+            `ValueError`: Both parameters `wt_input` and `paired_input` are set to False or True.
+                Only one of them must be True. 
+        """
         exp = models.ChipseqExperiment(rec_id)
+        rep_ids = exp.replicate_ids
+        for i in rep_ids:
+            exp = self.check_if_biosample_has_exp_on_portal(i.upstream_identifier)
+            if exp and not patch:
+                return exp["accession"]
+        reps = [models.Biosample(x) for x in rep_ids]
         payload = {}
         payload.upate(self.get_chipseq_exp_core_payload_props(pulsar_exp_json=exp))
         target = models.Target(exp.target_id)
@@ -354,15 +374,22 @@ class Submit():
         payload["description"] = target.upstream_identifier.rstrip('-human') + ' ChIP-seq on human ' + payload["biosample_term_name"]
         # POST experiment
         dcc_exp_id = self.post(payload=payload, dcc_profile="experiment", pulsar_model="ChipseqExperiment", pulsar_rec_id=rec_id)
-        ctl_ids = exp.control_replicate_ids
-        wt_ctl_id = exp.wild_type_input_control_id
+        if not patch:
+            # Then POST WT-input and paired-input control experiments. The WT-input is shared across
+            # multiple experiments from the same starting batch, so it's possible that it was POSTED
+            # already during submission of a related experiment. 
+
+            # First the WT-input:
+            self.post_chipseq_ctl_exp(rec_id=rec_id, wt_input=True)
+            # Then the Paired-input, which is unique to this experiment. 
+            self.post_chipseq_ctl_exp(rec_id=rec_id, paired_input=True)
         # POST experimental biosampes
         rep_ids = exp.replicate_ids
-        for i in rep_ids:
-            self.post_biosample(rec_id=i, patch=patch)
-        for i in ctl_ids:
-            self.post_biosample(rec_id=i, patch=patch)
-        self.post_biosample(rec_id=wt_ctl_id, patch=patch)
+        if (patch and not exp_only) or not patch:
+            # POST/Update the biosample replicates on the experiment. 
+            for i in rep_ids:
+                self.post_biosample_through_fastq(pulsar_biosample_id=i, dcc_exp_id=ctl_exp_accession, patch=patch)
+        return dcc_exp_id
 
     def get_chipseq_exp_core_payload_props(self, pulsar_exp_json):
         payload = {}
