@@ -260,7 +260,8 @@ class Submit():
         the forward and reverse reads FASTQ files. 
         """
         sres = models.SequencingResult(pulsar_sres_id)
-        sreq = models.SequencingRequest(sres.sequencing_request_id)
+        srun = models.SequencingRun(sres.sequencing_run_id)
+        sreq = models.SequencingRequest(srun.sequencing_request_id)
         self.post_fastq_file(pulsar_sres_id=sres.id, read_num=1, enc_replicate_id=enc_replicate_id, patch=patch)
         if not sreq.paired_end and sres.read2_uri:
             sres.patch({"paired_end": True})
@@ -743,7 +744,7 @@ class Submit():
         exp_reps_instance = encode_utils.replicate.ExpReplicates(self.ENC_CONN, dcc_exp_id)
         rep_json = exp_reps_instance.get_rep(biosample_accession=biosample.upstream_identifier, library_accession=lib.upstream_identifier)
         if rep_json and not patch:
-            return rep_json
+            return rep_json["uuid"]
         
         if dcc_exp["assay_term_name"] == "ChIP-seq":
             payload["antibody"] = "ENCAB728YTO" #AB-9 in Pulsar
@@ -769,7 +770,7 @@ class Submit():
             # corresponding replicate model, we can't use the wrapper method. 
             payload[self.ENC_CONN.PROFILE_KEY] = "replicate"
             res_json = self.ENC_CONN.post(payload=payload)
-            upstream_id = euu.get_record_id(res_json)
+            upstream_id = euu.get_record_id(res_json)["uuid"]
         return upstream_id
 
     def post_fastq_file(self, pulsar_sres_id, read_num, enc_replicate_id, patch=False):
@@ -824,6 +825,7 @@ class Submit():
         platform = models.SequencingPlatform(sreq.sequencing_platform_id)
         payload = {}
         payload["aliases"] = []
+        payload["read_length"] = 100
         payload["file_format"] = "fastq"
         payload["output_type"] = "reads"
         # The Pulsar SequencingPlatform must already have the upstream_identifier attribute set.
@@ -831,8 +833,8 @@ class Submit():
         # set flowcell_details
         flowcell_details = {}
         flowcell_details["barcode"] = lib.get_barcode_sequence()
-        flowcell_details["lane"] = srun.lane
-        payload["flowcell_details"] = flowcell_details
+        flowcell_details["lane"] = str(srun.lane)
+        payload["flowcell_details"] = [flowcell_details]
         payload["replicate"] = enc_replicate_id
         #if sreq.paired_end:
         #    payload["run_type"] = "paired-ended"
@@ -840,12 +842,12 @@ class Submit():
         #    payload["run_type"] = "single-ended"
         payload["run_type"] = "paired-ended"
         if read_num == 1:
-            payload["paired_end"] = 1
+            payload["paired_end"] = "1"
             file_uri = sres.read1_uri
             upstream_id = sres.read1_upstream_identifier
             read_count = sres.read1_count
         elif read_num == 2:
-            payload["paired_end"] = 2
+            payload["paired_end"] = "2"
             file_uri = sres.read2_uri
             upstream_id = sres.read2_upstream_identifier
             read_count = sres.read2_count
@@ -861,7 +863,7 @@ class Submit():
                print("Won't POST file for {} for SequencingResult {} with read number {} since it already exists on the Portal (has upstream identifier set).".format(file_uri, pulsar_sres_id, read_num))
                return upstream_id
         elif not upstream_id and patch:
-            print("Can't PATCH file object on the Portal when the SequencingResult {} for read {} doesn't have an upstream ID set.".format(pulsar_sres_id, read_num))
+            raise Exception("Can't PATCH file object on the Portal when the SequencingResult {} for read {} doesn't have an upstream ID set.".format(pulsar_sres_id, read_num))
 
         data_storage = models.DataStorage(srun.data_storage_id)
         data_storage_provider = models.DataStorageProvider(data_storage.data_storage_provider_id)
@@ -874,10 +876,12 @@ class Submit():
             if not os.path.exists(file_path) or not os.path.getsize(file_path):
                 # Download file.
                 dxpy.download_dxfile(dxid=file_uri, filename=file_path, show_progress=True)
-            file_ref = "dnanexus:{}".format(file_uri)
+            file_ref = "dnanexus${}".format(file_uri)
             payload["aliases"].append(file_ref)
             payload["aliases"].append(dx_file.name)
-            # md5sum key added to payload by encode-utils.
+            # md5sum key added to payload by encode-utils, but file size is required for file so
+            # we'll add it now.
+            payload.update(self.get_fsize_and_md5sum(file_path))
         elif data_storage_provider == "AWS S3 Bucket":
             file_path = file_uri
             # md5sum key added to payload by encode-utils.
@@ -890,15 +894,17 @@ class Submit():
 
         dcc_rep = self.ENC_CONN.get(rec_ids=enc_replicate_id, ignore404=False)
         dcc_exp = dcc_rep["experiment"]
+        payload["dataset"] = dcc_exp["accession"]
         dcc_exp_accession = dcc_exp["accession"]
         dcc_exp_type = dcc_exp["assay_term_name"] #i.e. ChIP-seq
         if dcc_exp_type == "ChIP-seq":
-            controlled_by = self.get_chipseq_controlled_by(pulsar_biosample=bio, read_num=read_num)
-            if controlled_by:
-                # Will be empty if this is a already a control SequencingResult file.
-                payload["controlled_by"] = controlled_by
-            else:
-                raise Exception("No controlled_by could be found for SequencingResult {} read number {}.".format(pulsar_sres_id, read_num))
+            if not bio.control and not bio.wild_type:
+                controlled_by = self.get_chipseq_controlled_by(pulsar_biosample=bio, read_num=read_num)
+                if controlled_by:
+                    # Will be empty if this is a already a control SequencingResult file.
+                    payload["controlled_by"] = controlled_by
+                else:
+                    raise Exception("No controlled_by could be found for SequencingResult {} read number {}.".format(pulsar_sres_id, read_num))
         else:
             raise Exception("There isn't yet support to set controlled_by for experiments of type {}.".format(dcc_exp_type))
 
@@ -915,9 +921,9 @@ class Submit():
             res_json = self.ENC_CONN.post(payload=payload)
             upstream_id = res_json["accession"]
             if read_num == 1:
-                sres.patch({"read1_upstream_accession": upstream_id})
+                sres.patch({"read1_upstream_identifier": upstream_id})
             else:
-                sres.patch({"read2_upstream_accession": upstream_id})
+                sres.patch({"read2_upstream_identifier": upstream_id})
         return upstream_id
         
 
@@ -935,7 +941,7 @@ class Submit():
         Returns:
             `list`: The upstream identifiers for the control file objects on the ENCODE Portal.
         """
-        if pulsar_biosample.control:
+        if pulsar_biosample.control or pulsar_biosample.wild_type:
             return []
         controlled_by = []
         chipseq_experiment = pulsarpy.models.ChipseqExperiment(pulsar_biosample.chipseq_experiment_id)
