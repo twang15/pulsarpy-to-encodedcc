@@ -441,7 +441,7 @@ class Submit():
         rep_ids = pulsar_exp.replicate_ids
         reps = [models.Biosample(x) for x in rep_ids]
         for i in rep_ids:
-            self.post_biosample_through_fastq(pulsar_biosample_id=i, dcc_exp_id=ctl_exp_accession)
+            self.post_biosample_through_fastq(pulsar_biosample_id=i, dcc_exp_id=pulsar_exp.upstream_identifier)
 
     def get_chipseq_exp_core_payload_props(self, pulsar_exp_json):
         payload = {}
@@ -871,10 +871,6 @@ class Submit():
             payload["paired_with"] = sres.read1_upstream_identifier
         if not file_uri:
             raise NoFastqFile("SequencingResult '{}' for R{read_num} does not have a FASTQ file path set.".format(pulsar_sres_id, read_num))
-        if upstream_id:
-            if not patch:
-               print("Won't POST file for {} for SequencingResult {} with read number {} since it already exists on the Portal (has upstream identifier set).".format(file_uri, pulsar_sres_id, read_num))
-               return upstream_id
         elif not upstream_id and patch:
             raise Exception("Can't PATCH file object on the Portal when the SequencingResult {} for read {} doesn't have an upstream ID set.".format(pulsar_sres_id, read_num))
 
@@ -959,6 +955,7 @@ class Submit():
         """
         if pulsar_biosample.control or pulsar_biosample.wild_type:
             return []
+        bio_id = pulsar_biosample.id
         controlled_by = []
         chipseq_experiment = pulsarpy.models.ChipseqExperiment(pulsar_biosample.chipseq_experiment_id)
         # First add pooled input. Normally one control but could be more. 
@@ -969,14 +966,14 @@ class Submit():
                 lib = ctl.get_latest_library()
                 controlled_by.extend(self.get_all_seqresult_fastq_file_accessions(lib)[read_num])
         # Next add WT input
-        wt_input_id = chipseq_experiment.wild_type_control
-        if wt_input:
+        wt_input_id = chipseq_experiment.wild_type_control_id
+        if wt_input_id:
             wt_input = pulsarpy.models.Biosample(wt_input_id)
             lib = wt_input.get_latest_library()
             controlled_by.extend(self.get_all_seqresult_fastq_file_accessions(lib)[read_num])
         return controlled_by
 
-    def get_all_seqresult_fastq_file_accessions(pulsar_lib):
+    def get_all_seqresult_fastq_file_accessions(self, pulsar_lib):
         res = {1: [], 2: []}
         sequencing_result_ids = pulsar_lib.sequencing_result_ids
         for sres_id in sequencing_result_ids:
