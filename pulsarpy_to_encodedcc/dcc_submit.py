@@ -182,15 +182,25 @@ class Submit():
         pulsar_rec = pulsar_model(pulsar_rec_id)
         upstream = pulsar_rec.upstream_identifier
         if upstream:
+            # May sure that upstream exists. Could be that the upstream identifier belongs to a different
+            # server, i.e. test or a demo, than the one we are currently connected to. 
             # No need to POST. 
-            return upstream
+            if upstream.startswith("ENC"):
+                # For sure this is a production accession and we should leave it alone.
+                return upstream
+            exists_on_server = self.ENC_CONN.get(rec_ids=upstream)
+            if exists_on_server:
+                return upstream
         aliases = payload.get("aliases", [])
         aliases.append(pulsar_rec.abbrev_id())
         # Add value of 'name' property as an alias, if this property exists for the given model.
         try:
             name = self.sanitize_prop_val(pulsar_rec.name)
             if name:
-                aliases.append(name)
+                # Need to abbend the model abbreviation to the name since some names are the same
+                # between models. For example, its common in Pulsar to have a Library named the
+                # same as the Biosample it belongs to.
+                aliases.append(pulsar_rec.MODEL_ABBR + "-" + name)
         except KeyError:
             pass
         aliases = list(set(aliases))
@@ -367,13 +377,11 @@ class Submit():
             if not dcc_exp:
                 payload[self.ENC_CONN.PROFILE_KEY] = "experiment"
                 dcc_exp = self.ENC_CONN.post(payload=payload)
-
-        ctl_exp_accession = dcc_exp["accession"]
+            ctl_exp_accession = dcc_exp["accession"]
 
         if (patch and not exp_only) or not patch:
             for b in input_ids:
                 self.post_biosample_through_fastq(pulsar_biosample_id=b, dcc_exp_id=ctl_exp_accession, patch=patch)
-        ctl_ids = exp.control_replicate_ids
         return ctl_exp_accession
 
     def post_chipseq_exp(self, rec_id, patch=False):
@@ -455,20 +463,23 @@ class Submit():
         ccs = [models.CrisprConstruct(i) for i in cc_ids]
         # DonorConstruct
         dc = models.DonorConstruct(rec.donor_construct_id)
+        dc_target = models.Target(dc.target_id)
 
         payload = {}
         payload["category"] = rec.category # Required
-        payload["description"] = rec.description
+        desc = rec.description.strip()
+        if desc:
+            payload["description"]
         payload["documents"] = self.post_documents(rec.document_ids)
 
         guide_seqs = list(c.guide_sequence for c in ccs)
         payload["guide_rna_sequences"] = guide_seqs
 
         if rec.category in ["insertion", "replacement"]:
-            payload["introduced_sequence"] = dc.insert_sequence
+            payload["introduced_sequence"] = dc.insert_sequence.upper()
 
         payload["method"] = "CRISPR"       # Required
-        payload["modified_site_by_target_id"] = dc.target_id
+        payload["modified_site_by_target_id"] = dc_target.upstream_identifier
         payload["purpose"] = rec.purpose   # Required
 
         # Note that CrisprConstruct can also has_many construct_tags. Those are not part of the donor
@@ -488,15 +499,15 @@ class Submit():
         payload["introduced_tags"] = introduced_tags
         reagents = []
         for i in [*ccs,dc]:
-            addgene_id = getattr(i, "addgene_id")
+            addgene_id = getattr(i, "addgene_id").strip()
             if addgene_id:
-                uri = "http://www.addgene.org/" + addgene_id
-                reagents.append({
-                    "source": "addgene",
-                    "identifier": addgene_id,
-                    "url": uri
-                })
-        payload["reagents"] = reagents
+                r = {}
+                r["source"] = "addgene"
+                r["url"] = "http://www.addgene.org/" + addgene_id
+                r["identifier"] = addgene_id,
+                reagents.append(r)
+        if reagents:
+            payload["reagents"] = reagents
         # ex: ENCGM094ZOS
 
         if patch: 
@@ -508,7 +519,9 @@ class Submit():
     def post_document(self, rec_id, patch=False):
         rec = models.Document(rec_id)
         payload = {}
-        payload["description"] = rec.description
+        desc = rec.description.strip()
+        if desc:
+            payload["description"] = rec.description
         doc_type = models.DocumentType(rec.document_type_id)
         payload["document_type"] = doc_type.name
         content_type = rec.content_type
@@ -591,7 +604,7 @@ class Submit():
             else:
                 payload["culture_harvest_date"] = date_biosample_taken
 
-        desc = rec.description
+        desc = rec.description.strip()
         if desc:
             payload["description"] = desc
 
@@ -642,7 +655,7 @@ class Submit():
         if part_of_biosample_id:
             part_of_biosample = models.Biosample(part_of_biosample_id)
             pob_upstream = part_of_biosample.get_upstream() 
-            if not pob_upstream:
+            if not pob_upstream or not pob_upstream.startswith("ENCBS"):
                 pob_upstream = self.post_biosample(part_of_biosample_id)
             payload["part_of"] = pob_upstream
     
@@ -770,7 +783,7 @@ class Submit():
             # corresponding replicate model, we can't use the wrapper method. 
             payload[self.ENC_CONN.PROFILE_KEY] = "replicate"
             res_json = self.ENC_CONN.post(payload=payload)
-            upstream_id = euu.get_record_id(res_json)["uuid"]
+            upstream_id = euu.get_record_id(res_json)
         return upstream_id
 
     def post_fastq_file(self, pulsar_sres_id, read_num, enc_replicate_id, patch=False):
@@ -904,7 +917,10 @@ class Submit():
                     # Will be empty if this is a already a control SequencingResult file.
                     payload["controlled_by"] = controlled_by
                 else:
-                    raise Exception("No controlled_by could be found for SequencingResult {} read number {}.".format(pulsar_sres_id, read_num))
+                    pass
+                    #raise Exception("No controlled_by could be found for SequencingResult {} read number {}.".format(pulsar_sres_id, read_num))
+                    # Instead of raise an Exception, let it slide. Pulsar users aren't setting the 
+                    # boolean fields control and wild_type_control as they should be so it's not reliable. 
         else:
             raise Exception("There isn't yet support to set controlled_by for experiments of type {}.".format(dcc_exp_type))
 
@@ -1024,7 +1040,9 @@ class Submit():
         # And now the rest
         payload["biosample_term_name"] = sorting_biosample["biosample_term_name"]["name"]
         payload["biosmple_term_id"] = sorting_biosample["biosample_term_name"]["accession"]
-        payload["description"] = rec.description
+        desc = rec.description.strip()
+        if desc:
+            payload["description"] = desc
         payload["documents"] = self.post_documents(rec.document_ids)
         exp_upstream = self.post(payload=payload, dcc_profile="experiment", pulsar_model=models.SingleCellSorting, pulsar_rec_id=rec_id)
 
@@ -1048,7 +1066,7 @@ class Submit():
                 # Submit a file record
 
 if __name__ == "__main__":
-    s = Submit(dcc_mode="dev") 
-    #s.post_chipseq_exp(rec_id=164, exp_only=False, patch=False)
-    s.post_chipseq_control_experiments(164)
+    s = Submit(dcc_mode="v79x0-test-master.demo.encodedcc.org") 
+    s.post_chipseq_exp(rec_id=164, patch=False)
+    #s.post_chipseq_control_experiments(164)
    
