@@ -415,8 +415,37 @@ class Submit():
             self.post_chipseq_control_experiments(rec_id=rec_id)
             # POST experimental biosampes
             self.post_chipseq_reps(rec_id)
+
+        # Add-in/PATCH possible_controls property
+        self.patch_chipseq_possible_controls(pulsar_exp.id)
         return dcc_exp_accession
 
+    def patch_chipseq_possible_controls(self, pulsar_exp_id):
+        possible_controls = self.get_chipseq_possible_controls(pulsar_exp_id)
+        exp = models.ChipseqExperiment(pulsar_exp_id)
+        payload = {}
+        payload["possible_controls"] = possible_controls
+        exp = models.ChipseqExperiment(pulsar_exp_id)
+        self.patch(payload=payload, upstream_id=exp.upstream_identifier)
+        
+    def get_chipseq_possible_controls(self, pulsar_exp_id):
+        possible_controls = []
+        exp = models.ChipseqExperiment(pulsar_exp_id)
+        wt = models.Biosample(exp.wild_type_control_id)
+        wt_upstream = wt.upstream_identifier
+        wt_ctl_exp = self.check_if_biosample_has_exp_on_portal(wt_upstream)
+        if not wt_ctl_exp:
+            raise Exception("WT input {} on ChipseqExperiment {} doesn't have an upstream control experiment record.".format(wt.abbrev_id(), exp.abbrev_id()))
+        possible_controls.append(wt_ctl_exp["accession"])
+        pis = [models.Biosample(x) for x in exp.control_replicate_ids]
+        for i in pis:
+            upstream = i.upstream_identifier
+            pi_ctl_exp = self.check_if_biosample_has_exp_on_portal(wt_upstream)
+            if not pi_ctl_exp:
+                raise Exception("Paired input {} on ChipseqExperiment {} doesn't have an upstream control experiment record.".format(i.abbrev_id(), exp.abbrev_id()))
+            possible_controls.append(pi_ctl_exp["accession"])
+        return possible_controls
+        
     def post_chipseq_control_experiments(self, rec_id):
         """
         POSTS the WT input and the paired input controls that are associated to the indicated 
@@ -499,7 +528,7 @@ class Submit():
         payload["introduced_tags"] = introduced_tags
         reagents = []
         for i in [*ccs,dc]:
-            addgene_id = getattr(i, "addgene_id").strip()
+            addgene_id = str(getattr(i, "addgene_id"))
             if addgene_id:
                 r = {}
                 r["source"] = "addgene"
