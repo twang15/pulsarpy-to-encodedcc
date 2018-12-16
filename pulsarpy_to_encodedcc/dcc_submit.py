@@ -355,9 +355,9 @@ class Submit():
             alias += i.abbrev_id()
         alias.rstrip()
         if wt_input:
-            alias_prefix = "wt-ctl-exp_"
+            alias_prefix = "pWT-CTL_"
         else:
-            alias_prefix = "pi-ctl-exp_"
+            alias_prefix = "pPI-CTL_"
         alias = alias_prefix + alias 
         payload["aliases"] = [alias]
         payload.update(self.get_chipseq_exp_core_payload_props(pulsar_exp_json=pulsar_exp))
@@ -766,7 +766,7 @@ class Submit():
         # these two attributes don't really make sense, but they are required to submit, so ...
 
         if not biosample.upstream_identifier in exp_reps_instance.rep_hash:
-            brn = 1
+            brn = exp_reps_instance.suggest_brn()
             trn = 1
         else:
             brn, trn = exp_reps_instance.suggest_brn_trn(biosample.upstream_identifier)
