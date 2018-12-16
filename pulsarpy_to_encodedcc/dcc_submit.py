@@ -440,11 +440,11 @@ class Submit():
         pis = [models.Biosample(x) for x in exp.control_replicate_ids]
         for i in pis:
             upstream = i.upstream_identifier
-            pi_ctl_exp = self.check_if_biosample_has_exp_on_portal(wt_upstream)
+            pi_ctl_exp = self.check_if_biosample_has_exp_on_portal(upstream)
             if not pi_ctl_exp:
                 raise Exception("Paired input {} on ChipseqExperiment {} doesn't have an upstream control experiment record.".format(i.abbrev_id(), exp.abbrev_id()))
             possible_controls.append(pi_ctl_exp["accession"])
-        return possible_controls
+        return list(set(possible_controls))
         
     def post_chipseq_control_experiments(self, rec_id):
         """
