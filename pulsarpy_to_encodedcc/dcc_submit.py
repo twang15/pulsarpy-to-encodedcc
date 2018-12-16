@@ -528,12 +528,12 @@ class Submit():
         payload["introduced_tags"] = introduced_tags
         reagents = []
         for i in [*ccs,dc]:
-            addgene_id = str(getattr(i, "addgene_id"))
+            addgene_id = getattr(i, "addgene_id")
             if addgene_id:
                 r = {}
                 r["source"] = "addgene"
                 r["url"] = "http://www.addgene.org/" + addgene_id
-                r["identifier"] = addgene_id,
+                r["identifier"] = addgene_id
                 reagents.append(r)
         if reagents:
             payload["reagents"] = reagents
