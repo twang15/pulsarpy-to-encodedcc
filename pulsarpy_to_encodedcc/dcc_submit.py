@@ -200,7 +200,7 @@ class Submit():
                 # Need to abbend the model abbreviation to the name since some names are the same
                 # between models. For example, its common in Pulsar to have a Library named the
                 # same as the Biosample it belongs to.
-                aliases.append(pulsar_rec.MODEL_ABBR + "-" + name)
+                aliases.append(models.Model.PULSAR_LIMS_PREFIX + pulsar_rec.MODEL_ABBR + "-" + name)
         except KeyError:
             pass
         aliases = list(set(aliases))
@@ -505,7 +505,8 @@ class Submit():
         payload["guide_rna_sequences"] = guide_seqs
 
         if rec.category in ["insertion", "replacement"]:
-            payload["introduced_sequence"] = dc.insert_sequence.upper()
+            pass # The insert can be viewed in addgene. This doesn't look good to show on the Portal.
+            #payload["introduced_sequence"] = dc.insert_sequence.upper()
 
         payload["method"] = "CRISPR"       # Required
         payload["modified_site_by_target_id"] = dc_target.upstream_identifier
