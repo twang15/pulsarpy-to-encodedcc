@@ -337,14 +337,21 @@ class Submit():
         pulsar_exp = models.ChipseqExperiment(rec_id)
         input_ids = []
         if wt_input:
+          experiment_type = "wild type"
           # Only 1 Wild Type input per experiment.
           input_ids.append(pulsar_exp.wild_type_control_id)
         else:
+            experiment_type = "paired-input"
             # Normally there will only be one paired_input control Biosample, but there could at times
             # be another. That happens when one of the reps fail, and another rep has to be made from a
             # different cell batch than the sibling rep on the experiment.
             input_ids.extend(pulsar_exp.control_replicate_ids) # Biosample records.
         inputs = [models.Biosample(x) for x in input_ids]
+        if not inputs:
+            msg = "Can't submit {} control exp. for {}: no replicates.".format(experiment_type, pulsar_exp.abbrev_id())
+            logging.error(msg)
+            raise Exception(msg)
+        dcc_exp = ""
         for i in inputs:
             dcc_exp = self.check_if_biosample_has_exp_on_portal(i.upstream_identifier)
             if dcc_exp:
