@@ -348,9 +348,10 @@ class Submit():
         pulsar_exp = models.ChipseqExperiment(rec_id)
         input_ids = []
         if wt_input:
-          experiment_type = "wild type"
-          # Only 1 Wild Type input per experiment.
-          input_ids.append(pulsar_exp.wild_type_control_id)
+            experiment_type = "wild type"
+            # Only 1 Wild Type input per experiment.
+            if pulsar_exp.wild_type_control_id:
+                input_ids.append(pulsar_exp.wild_type_control_id)
         else:
             experiment_type = "paired-input"
             # Normally there will only be one paired_input control Biosample, but there could at times
