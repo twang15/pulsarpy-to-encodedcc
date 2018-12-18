@@ -7,7 +7,16 @@
 #nathankw@stanford.edu
 ###
 
+"""
+This script is meant to be called in a for-loop context, i.e. when submitting one experiment after
+another.
+"""
+
 import pulsarpy_to_encodedcc.dcc_submit as d
 mode = "v79x0-test-master.demo.encodedcc.org" 
 s = d.Submit(dcc_mode=mode)
-s.post_chipseq_exp(rec_id=165, patch=False)
+try:
+    s.post_chipseq_exp(rec_id=165, patch=False)
+except d.ExpMissingReplicates:
+    # Already logged to error log file
+    pass 

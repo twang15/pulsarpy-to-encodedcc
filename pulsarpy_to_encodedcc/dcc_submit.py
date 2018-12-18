@@ -357,11 +357,11 @@ class Submit():
             # be another. That happens when one of the reps fail, and another rep has to be made from a
             # different cell batch than the sibling rep on the experiment.
             input_ids.extend(pulsar_exp.control_replicate_ids) # Biosample records.
-        inputs = [models.Biosample(x) for x in input_ids]
-        if not inputs:
+        if not input_ids:
             msg = "Can't submit {} control exp. for {}: no replicates.".format(experiment_type, pulsar_exp.abbrev_id())
             error_logger.error(msg)
             raise ExpMissingReplicates(msg)
+        inputs = [models.Biosample(x) for x in input_ids]
         dcc_exp = ""
         for i in inputs:
             dcc_exp = self.check_if_biosample_has_exp_on_portal(i.upstream_identifier)
