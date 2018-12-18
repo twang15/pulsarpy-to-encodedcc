@@ -29,6 +29,7 @@ import os
 
 import dxpy
 
+from pulsarpy_to_encodedcc
 from pulsarpy_to_encodedcc import FASTQ_FOLDER
 from pulsarpy import models
 import pulsarpy.utils
@@ -39,9 +40,19 @@ import encode_utils.connection as euc
 import encode_utils.utils as euu
 import pdb
 
+error_logger = logging.getLogger(pulsarpy_to_encodedcc.ERROR_LOGGER_NAME)
+
+
+class ExpMissingReplicates(Exception):
+    """
+    Raised when trying to POST an experiment to the Portal (such as a control experiment) and
+    there aren't any replicates (Biosample records) to attach to it.
+    """
+    
 
 class UpstreamNotSet(Exception):
     pass
+
 
 class NoFastqFile(Exception):
     """
@@ -349,8 +360,8 @@ class Submit():
         inputs = [models.Biosample(x) for x in input_ids]
         if not inputs:
             msg = "Can't submit {} control exp. for {}: no replicates.".format(experiment_type, pulsar_exp.abbrev_id())
-            logging.error(msg)
-            raise Exception(msg)
+            error_logger.error(msg)
+            raise ExpMissingReplicates(msg)
         dcc_exp = ""
         for i in inputs:
             dcc_exp = self.check_if_biosample_has_exp_on_portal(i.upstream_identifier)
