@@ -29,7 +29,7 @@ import os
 
 import dxpy
 
-from pulsarpy_to_encodedcc
+import pulsarpy_to_encodedcc
 from pulsarpy_to_encodedcc import FASTQ_FOLDER
 from pulsarpy import models
 import pulsarpy.utils
