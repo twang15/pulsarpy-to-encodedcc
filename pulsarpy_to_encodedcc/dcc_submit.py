@@ -129,7 +129,7 @@ class Submit():
         Returns:
             `str`. The cleaned value that is submission acceptable. 
         """
-        return txt.replace("/","-")
+        return txt.replace("/","-").strip()
 
     def get_vendor_id_from_encodeportal(self, pulsar_vendor_id):
         """
