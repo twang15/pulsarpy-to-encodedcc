@@ -26,6 +26,7 @@ Optional environment variables:
 import base64
 import logging
 import os
+import re
 
 import dxpy
 
@@ -41,6 +42,8 @@ import encode_utils.utils as euu
 import pdb
 
 error_logger = logging.getLogger(pulsarpy_to_encodedcc.ERROR_LOGGER_NAME)
+# regex for finding one or more continuous spaces
+space_reg = re.compile(r' +')
 
 
 class ExpMissingReplicates(Exception):
@@ -129,7 +132,10 @@ class Submit():
         Returns:
             `str`. The cleaned value that is submission acceptable. 
         """
-        return txt.replace("/","-").strip()
+        txt = txt.replace("/","-").strip()
+        # Replace contiguous spaces with a single space
+        return space_reg.sub(" ", txt)
+        
 
     def get_vendor_id_from_encodeportal(self, pulsar_vendor_id):
         """
