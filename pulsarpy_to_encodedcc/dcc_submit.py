@@ -215,18 +215,21 @@ class Submit():
             if exists_on_server:
                 return upstream
         aliases = payload.get("aliases", [])
-        aliases.append(pulsar_rec.abbrev_id())
+        abbrev_alias = pulsar_rec.abbrev_id()
+        if abbrev_alias not in aliases:
+            aliases.append(abbrev_alias)
         # Add value of 'name' property as an alias, if this property exists for the given model.
         try:
             name = self.sanitize_prop_val(pulsar_rec.name)
             if name:
-                # Need to abbend the model abbreviation to the name since some names are the same
+                # Need to append the model abbreviation to the name since some names are the same
                 # between models. For example, its common in Pulsar to have a Library named the
                 # same as the Biosample it belongs to.
-                aliases.append(models.Model.PULSAR_LIMS_PREFIX + pulsar_rec.MODEL_ABBR + "-" + name)
+                alias_name = models.Model.PULSAR_LIMS_PREFIX + pulsar_rec.MODEL_ABBR + "-" + name
+                if alias_name not in aliases:
+                    aliases.append(alias_name)
         except KeyError:
             pass
-        aliases = list(set(aliases))
         payload["aliases"] = aliases
     
         # `dict`. The POST response if the record didn't yet exist on the ENCODE Portal, or the
