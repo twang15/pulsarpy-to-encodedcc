@@ -51,6 +51,12 @@ class ExpMissingReplicates(Exception):
     Raised when trying to POST an experiment to the Portal (such as a control experiment) and
     there aren't any replicates (Biosample records) to attach to it.
     """
+
+class MissingTargetUpstream(Exception):
+    """
+    Raised when submitting a record that tries to link to a DCC target, but the target record in Pulsar 
+    doesn't have the upstream_identifier attribute set.
+    """
     
 
 class UpstreamNotSet(Exception):
@@ -518,6 +524,11 @@ class Submit():
         # DonorConstruct
         dc = models.DonorConstruct(rec.donor_construct_id)
         dc_target = models.Target(dc.target_id)
+        target_upstream = dc_target.upstream_identifier
+        if not target_upstream:
+            msg = "Target {} missing upstream identifier.".format(dc_target.abbrev_id())
+            error_logger.error(msg)
+            raise MissingTargetUpstream(msg)
 
         payload = {}
         payload["category"] = rec.category # Required
