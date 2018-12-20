@@ -566,8 +566,9 @@ class Submit():
                 tag = "eGFP"
             introduced_tags.append({"name": tag, "location": "C-terminal"})
         if not introduced_tags:
+            # tags are required for modifications on the Portal.
             introduced_tags = ["eGFP"]
-        payload["introduced_tags"] = introduced_tags]
+        payload["introduced_tags"] = introduced_tags
         reagents = []
         for i in [*ccs,dc]:
             addgene_id = getattr(i, "addgene_id")
