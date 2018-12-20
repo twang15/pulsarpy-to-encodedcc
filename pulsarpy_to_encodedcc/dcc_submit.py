@@ -829,7 +829,9 @@ class Submit():
             return rep_json["uuid"]
         
         if dcc_exp["assay_term_name"] == "ChIP-seq":
-            payload["antibody"] = "ENCAB728YTO" #AB-9 in Pulsar
+            # Only add antibody if not replicate on control experiment 
+            if not dcc_exp["target"]["uuid"] == "89839f28-ad35-4bb4-a214-ee65d0a97d8d":
+                payload["antibody"] = "ENCAB728YTO" #AB-9 in Pulsar
         #payload["aliases"] = 
         # Set biological_replicate_number and technical_replicate_number. For ssATAC-seq experiments,
         # these two attributes don't really make sense, but they are required to submit, so ...
