@@ -567,7 +567,7 @@ class Submit():
             introduced_tags.append({"name": tag, "location": "C-terminal"})
         if not introduced_tags:
             # tags are required for modifications on the Portal.
-            introduced_tags = ["eGFP"]
+            introduced_tags = [{"name": "eGFP", "location": "C-terminal"}]
         payload["introduced_tags"] = introduced_tags
         reagents = []
         for i in [*ccs,dc]:
