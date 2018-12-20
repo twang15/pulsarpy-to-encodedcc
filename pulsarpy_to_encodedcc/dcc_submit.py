@@ -565,7 +565,8 @@ class Submit():
                 # simply eGFP and mention the linker used elsewhere. 
                 tag = "eGFP"
             introduced_tags.append({"name": tag, "location": "C-terminal"})
-        payload["introduced_tags"] = introduced_tags
+        if introduced_tags:
+            payload["introduced_tags"] = introduced_tags
         reagents = []
         for i in [*ccs,dc]:
             addgene_id = getattr(i, "addgene_id")
