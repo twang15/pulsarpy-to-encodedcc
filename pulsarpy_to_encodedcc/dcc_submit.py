@@ -555,6 +555,7 @@ class Submit():
         # insert though. 
         construct_tags = [models.ConstructTag(i) for i in dc.construct_tag_ids]
         construct_tag_names = [x.name for x in construct_tags]
+        seen_tags = []
         introduced_tags = []
         for tag in construct_tag_names:
             if tag.startswith("eGFP"):
@@ -564,7 +565,10 @@ class Submit():
                 # The Portal, however, only has eGFP and it makes most sense to submit this as 
                 # simply eGFP and mention the linker used elsewhere. 
                 tag = "eGFP"
-            introduced_tags.append({"name": tag, "location": "C-terminal"})
+            if tag not in seen_tags:
+                # Avoid potential for duplicate tags, which are not allowed of course on Portal.
+                seen_tags.append(tag) 
+                introduced_tags.append({"name": tag, "location": "C-terminal"})
         if not introduced_tags:
             # tags are required for modifications on the Portal.
             introduced_tags = [{"name": "eGFP", "location": "C-terminal"}]
