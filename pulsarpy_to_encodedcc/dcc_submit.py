@@ -435,6 +435,11 @@ class Submit():
         payload = {}
         payload.update(self.get_chipseq_exp_core_payload_props(pulsar_exp_json=pulsar_exp))
         target = models.Target(pulsar_exp.target_id)
+        target_upstream = target.upstream_identifier
+        if not target_upstream:
+            msg = "Target {} missing upstream identifier.".format(target.abbrev_id())
+            error_logger.error(msg)
+            raise MissingTargetUpstream(msg)
         payload["target"] = target.upstream_identifier
         #payload["description"] = pulsar_exp.description.strip()
         payload["description"] = target.upstream_identifier.rstrip('-human') + ' ChIP-seq on human ' + payload["biosample_term_name"]
