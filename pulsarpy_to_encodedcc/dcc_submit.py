@@ -160,16 +160,25 @@ class Submit():
         return upstream
                   
 
-    def patch(self, payload, upstream_id):
+    def patch(self, payload, upstream_id, dont_extend_arrays=False):
         """
         A wrapper over `encode_utils.connection.Connection.patch()`.
+
+        Args:
+            dont_extend_arrays: `bool`. Dynamic way to signal not to extend array property values. 
+                If not True, then the boolean value of `self.extend_arrays` determines whether
+                arrays are extended. 
 
         Returns:
             `dict`: The JSON response from the PATCH operation, or an empty dict if the record doesn't
                 exist on the Portal.  See ``encode_utils.connection.Connection.patch()`` for more details.
         """
         payload[self.ENC_CONN.ENCID_KEY] = upstream_id
-        response_json = self.ENC_CONN.patch(payload=payload, extend_array_values=self.extend_arrays)
+        if dont_extend_arrays:
+            extend = False
+        else:
+            extend = self.extend_arrays
+        response_json = self.ENC_CONN.patch(payload=payload, extend_array_values=extend)
         if not response_json:
             raise Exception("Couldn't PATCH record on the Portal since it doesn't exist.")
         return upstream_id
@@ -358,7 +367,6 @@ class Submit():
                 Only one of them must be True. 
         """
         print(">>> IN post_chipseq_ctl_exp()")
-        pdb.set_trace()
         if (not wt_input and not paired_input) or (wt_input and paired_input):
             raise ValueError("Either the wt_input or the paired_input parameter must be set to True.")
 
@@ -463,11 +471,10 @@ class Submit():
 
     def patch_chipseq_possible_controls(self, pulsar_exp_id):
         possible_controls = self.get_chipseq_possible_controls(pulsar_exp_id)
-        exp = models.ChipseqExperiment(pulsar_exp_id)
         payload = {}
         payload["possible_controls"] = possible_controls
         exp = models.ChipseqExperiment(pulsar_exp_id)
-        self.patch(payload=payload, upstream_id=exp.upstream_identifier)
+        self.patch(payload=payload, upstream_id=exp.upstream_identifier, dont_extend_arrays=True)
         
     def get_chipseq_possible_controls(self, pulsar_exp_id):
         possible_controls = []
