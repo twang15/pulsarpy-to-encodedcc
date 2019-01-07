@@ -357,6 +357,8 @@ class Submit():
             `ValueError`: Both parameters `wt_input` and `paired_input` are set to False or True.
                 Only one of them must be True. 
         """
+        print(">>> IN post_chipseq_ctl_exp()")
+        pdb.set_trace()
         if (not wt_input and not paired_input) or (wt_input and paired_input):
             raise ValueError("Either the wt_input or the paired_input parameter must be set to True.")
 
@@ -493,6 +495,7 @@ class Submit():
         Args:
             rec_id: `int`. ID of a ChipseqExperiment record in Pulsar.
         """
+        print(">>> IN post_chipseq_control_experiments()")
         # First the WT-input:
         self.post_chipseq_ctl_exp(rec_id=rec_id, wt_input=True)
         # Then the Paired-input, which is unique to this experiment. 
