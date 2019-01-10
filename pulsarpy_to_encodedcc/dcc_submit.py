@@ -337,7 +337,7 @@ class Submit():
                 accessions = []
                 for i in exps:
                     accessions.append(i["accession"])
-                    msg = "Error: Biosample {} is associated to more than one Portal experiment: {}.".format(dcc_biosample_id, ", ".join(accessions))
+                msg = "Error: Biosample {} is associated to more than one Portal experiment: {}.".format(dcc_biosample_id, ", ".join(accessions))
                 raise Exception(msg)
             return exps[0]
         return False
