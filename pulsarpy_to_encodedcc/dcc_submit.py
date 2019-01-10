@@ -862,6 +862,7 @@ class Submit():
             brn = exp_reps_instance.suggest_brn()
             trn = 1
         else:
+            pdb.set_trace()
             brn, trn = exp_reps_instance.suggest_brn_trn(biosample.upstream_identifier)
             
         payload["biological_replicate_number"] = brn
