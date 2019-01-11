@@ -27,6 +27,7 @@ import base64
 import logging
 import os
 import re
+import sys
 
 import dxpy
 
