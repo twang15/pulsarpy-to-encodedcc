@@ -32,6 +32,6 @@ file_handler.setLevel(logging.ERROR)
 file_handler.setFormatter(f_formatter)
 error_logger.addHandler(file_handler)
 
-def log_error(msg)
+def log_error(msg):
     error_logger.error(msg)
     print(msg)
