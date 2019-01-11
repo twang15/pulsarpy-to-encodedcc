@@ -386,7 +386,7 @@ class Submit():
             input_ids.extend(pulsar_exp.control_replicate_ids) # Biosample records.
         if not input_ids:
             msg = "Can't submit {} control exp. for {}: no replicates.".format(experiment_type, pulsar_exp.abbrev_id())
-            error_logger.error(msg)
+            pulsarpy_to_encodedcc.log_error(msg)
             raise ExpMissingReplicates(msg)
         inputs = [models.Biosample(x) for x in input_ids]
         dcc_exp = ""
@@ -449,7 +449,7 @@ class Submit():
         target_upstream = target.upstream_identifier
         if not target_upstream:
             msg = "Target {} missing upstream identifier.".format(target.abbrev_id())
-            error_logger.error(msg)
+            pulsarpy_to_encodedcc.log_error(msg)
             raise MissingTargetUpstream(msg)
         payload["target"] = target.upstream_identifier
         #payload["description"] = pulsar_exp.description.strip()
@@ -546,7 +546,7 @@ class Submit():
         target_upstream = dc_target.upstream_identifier
         if not target_upstream:
             msg = "Target {} missing upstream identifier.".format(dc_target.abbrev_id())
-            error_logger.error(msg)
+            pulsarpy_to_encodedcc.log_error(msg)
             raise MissingTargetUpstream(msg)
 
         payload = {}
