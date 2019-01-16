@@ -53,6 +53,9 @@ class ExpMissingReplicates(Exception):
     there aren't any replicates (Biosample records) to attach to it.
     """
 
+class MissingSequencingResult(Exception):
+    pass
+
 class MissingTargetUpstream(Exception):
     """
     Raised when submitting a record that tries to link to a DCC target, but the target record in Pulsar 
@@ -294,6 +297,11 @@ class Submit():
         replicate_upstream = self.post_replicate(pulsar_library_id=library.id, dcc_exp_id=dcc_exp_id, patch=patch)
         # POST file records for all sequencing results for the Library
         sres_ids = library.sequencing_result_ids
+        if not sres_ids:
+            msg = "No SequencingResult for Library {} of Biosample {}, exiting.".format(pulsar_biosample_id, library.id)
+            error_logger.error(msg)
+            raise MissingSequencingResult(msg)
+        
         for i in sres_ids:
             self.post_sres(pulsar_sres_id=i, enc_replicate_id=replicate_upstream, patch=patch)
 
