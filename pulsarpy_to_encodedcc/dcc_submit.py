@@ -278,7 +278,14 @@ class Submit():
         res["biosample_type"] = bty.name
         return res
 
-    def post_biosample_through_fastq(self, pulsar_biosample_id, dcc_exp_id, patch=False):
+    def get_exp_of_biosample(self, dcc_biosample_id):
+        query_string =  "?searchTerm={}&type=Experiment".format(dcc_biosample_id)
+        experiments = self.ENC_CONN.search(url=query_string)
+        if len(experiments) > 1:
+            raise Exception("Expected to find 1 experiment linked to biosample {}, instead found more: {}.".format(dcc_biosample_id, len(experiments)))
+        return experiments[0]["accession"]
+
+    def post_biosample_through_fastq(self, pulsar_biosample_id, dcc_exp_id=False, patch=False):
         """
         POSTS the Biosample, it's latest Library, and all SequencingResults for that Library.
 
@@ -286,10 +293,15 @@ class Submit():
             pulsar_biosample_id: `int`. The ID of a Pulsar Biosample record.
                 SinglecellSorting, AtacSeq).
             dcc_exp_id: `int`. The ID of the experiment record on the Portal to link the replicate to.
+                If not provided, will be looked up. Providing it only saves execution time per the 
+                aforementioned lookup step. 
         """
         # POST biosample record
         biosample_upstream = self.post_biosample(pulsar_biosample_id, patch=patch)
         biosample = models.Biosample(pulsar_biosample_id)
+        if not dcc_exp_id:
+            dcc_exp_id = self.get_exp_of_biosample(biosample_upstream)
+            
         # POST library record
         library = biosample.get_latest_library()
         library_upstream = self.post_library(rec_id=library.id, patch=patch)
@@ -888,6 +900,11 @@ class Submit():
             upstream_id = euu.get_record_id(res_json)
         return upstream_id
 
+    def upload_fastq_files(self, dcc_biosample_id):
+        pulsar_bio = models.Biosample(upstream_id=dcc_biosample_id)
+        
+        
+
     def post_fastq_file(self, pulsar_sres_id, read_num, enc_replicate_id, patch=False):
         """
         Creates a file record on the ENCODE Portal. Checks the SequencingResult in Pulsar to see 
@@ -911,15 +928,14 @@ class Submit():
         We normally submit them by matching read numbers, so if the file object we are creating is 
         for a R1 FASTQ file, then all the controlled_by accessions are also R1 FASTQ files. The challenge
         is in knowing which SequencingResult set to use for control FASTQ files. Since a Biosample can
-        have multiple Libraries, which can have multiple SequencingRequest, which can have multiple
+        have multiple Libraries, which can have multiple SequencingRequests, which can have multiple
         SequencingRuns, there can be many sets of SequencingResults. However, since in most cases
         there will only be one of each, the approach taken here is to use the SequencingResults of
         the latest SequencingRun of the latest SequencingRequest. Once this simplicity fails to hold,
         an updated approach will need to be taken. 
 
-        If trying to POST a file that already has an upstream identifier set in the SequencingResult
-        for the given read number, if the patch argument is set to False then a warning will be 
-        sent to STDOUT and the function will return the None object. 
+        If you have alreay created the file record on the Portal and for some reason the FASTQs didn't
+        upload, you can try to reupload the FASTQs by calling this method with patch equal to False. 
 
         Args:
             pulsar_sres_id: A SequencingResult record in Pulsar. 
@@ -984,15 +1000,13 @@ class Submit():
             dx_file = dxpy.DXFile(dxid=file_uri)
             file_path = os.path.join(FASTQ_FOLDER, dx_file.name)
             # Check if file exists and is non-empty in download directory before attempting to download.
-            if not os.path.exists(file_path) or not os.path.getsize(file_path):
+            if not patch:
+                if not os.path.exists(file_path) or not os.path.getsize(file_path):
                 # Download file.
                 dxpy.download_dxfile(dxid=file_uri, filename=file_path, show_progress=True)
             file_ref = "dnanexus${}".format(file_uri)
             payload["aliases"].append(file_ref)
             payload["aliases"].append(dx_file.name)
-            # md5sum key added to payload by encode-utils, but file size is required for file so
-            # we'll add it now.
-            payload.update(self.get_fsize_and_md5sum(file_path))
         elif data_storage_provider == "AWS S3 Bucket":
             file_path = file_uri
             # md5sum key added to payload by encode-utils.
@@ -1040,15 +1054,6 @@ class Submit():
                 sres.patch({"read2_upstream_identifier": upstream_id})
         return upstream_id
         
-
-    def get_fsize_and_md5sum(self, file_path):
-        fsize = os.path.getsize(file_path)
-        md5sum = euu.calculate_md5sum(file_path)
-        stats = {}
-        stats["file_size"] = fsize
-        stats["md5sum"] = md5sum
-        return stats
-
     def get_chipseq_controlled_by(self, pulsar_biosample, read_num):
         """
         Given a p
