@@ -1002,8 +1002,8 @@ class Submit():
             # Check if file exists and is non-empty in download directory before attempting to download.
             if not patch:
                 if not os.path.exists(file_path) or not os.path.getsize(file_path):
-                # Download file.
-                dxpy.download_dxfile(dxid=file_uri, filename=file_path, show_progress=True)
+                    # Download file.
+                    dxpy.download_dxfile(dxid=file_uri, filename=file_path, show_progress=True)
             file_ref = "dnanexus${}".format(file_uri)
             payload["aliases"].append(file_ref)
             payload["aliases"].append(dx_file.name)
