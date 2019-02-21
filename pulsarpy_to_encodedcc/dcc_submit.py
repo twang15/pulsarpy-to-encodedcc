@@ -546,7 +546,7 @@ class Submit():
         payload = {}
         first_rep = models.Biosample(pulsar_exp_json.replicate_ids[0])
         # Add biosample_term_name, biosample_term_id, and biosample_type props
-        payload.update(self.get_biosample_term_name_and_type(first_rep))
+        payload["biosample_ontology"] = first_rep.biosample_term_name
         payload["assay_term_name"] = "ChIP-seq"
         payload["documents"] = self.post_documents(pulsar_exp_json.document_ids)
         payload["experiment_classification"] = ["functional genomics assay"]
@@ -706,7 +706,7 @@ class Submit():
         # variable is set.
         payload = {}
         # Add biosample_term_name, biosample_term_id, biosample_type props
-        payload.update(self.get_biosample_term_name_and_type(rec))
+        payload["biosample_ontology"] = rec.biosample_term_name
 
         bty = models.BiosampleType(rec.biosample_type_id)
         date_biosample_taken = rec.date_biosample_taken
@@ -873,7 +873,7 @@ class Submit():
         
         if dcc_exp["assay_term_name"] == "ChIP-seq":
             # Only add antibody if not replicate on control experiment 
-            if not dcc_exp["target"]["uuid"] == "89839f28-ad35-4bb4-a214-ee65d0a97d8d":
+            if not dcc_exp["target"]["uuid"] == "89839f28-ad35-4bb4-a214-ee65d0a97d8d": # Control-human target
                 payload["antibody"] = "ENCAB728YTO" #AB-9 in Pulsar
         #payload["aliases"] = 
         # Set biological_replicate_number and technical_replicate_number. For ssATAC-seq experiments,
@@ -1139,11 +1139,9 @@ class Submit():
         payload = {}
         # Set the explicitly required properties first:
         payload["assay_term_name"] = "single-cell ATAC-seq"
-        payload["biosample_type"] = sorting_biosample["biosample_type"]["name"]
         payload["experiment_classification"] = ["functional genomics"]
         # And now the rest
-        payload["biosample_term_name"] = sorting_biosample["biosample_term_name"]["name"]
-        payload["biosmple_term_id"] = sorting_biosample["biosample_term_name"]["accession"]
+        payload["biosample_ontology"] = sorting_biosample["biosample_term_name"]["name"]
         desc = rec.description.strip()
         if desc:
             payload["description"] = desc
