@@ -108,7 +108,7 @@ def biosample(rec_id, patch=False):
     organism, source
 
     Args:
-        rec_id: `str`. An identifier for a document record on the ENCODE Portal.
+        rec_id: `str`. An identifier for a biosample record on the ENCODE Portal.
 
     Returns:
         `dict`: The JSON representation of the existing Biosample if it already exists
@@ -163,7 +163,7 @@ def biosample(rec_id, patch=False):
 
     # Patch in any documents (has_many relationship)
     dcc_document_ids = dcc_rec["documents"] # list of DCC identifiers
-    linked_document_ids = [x["id"] for x in pulsar_obj.documents]
+    linked_document_ids = [x["id"] for x in pulsar_obj.document_ids]
     payload = {}
     payload["document_ids"] = []
     for doc in dcc_document_ids:
@@ -176,7 +176,7 @@ def biosample(rec_id, patch=False):
         
     # Patch in any treatments (has_many relationship)
     dcc_treatment_ids = dcc_rec["treatments"] # list of DCC identifiers
-    linked_treatment_ids = [x["id"] for x in pulsar_obj.treatments]
+    linked_treatment_ids = [x["id"] for x in pulsar_obj.treatment_ids]
     payload = {}
     payload["treatment_ids"] = []
     for treat in dcc_treatment_ids:
