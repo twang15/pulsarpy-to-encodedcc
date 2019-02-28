@@ -27,6 +27,7 @@ import base64
 import logging
 import os
 import re
+import requests
 import sys
 
 import dxpy
@@ -235,7 +236,7 @@ class Submit():
         try:
             name = self.sanitize_prop_val(pulsar_rec.name)
             if name:
-                # Need to append the model abbreviation to the name since some names are the same
+                # Need to prepend the model abbreviation to the name since some names are the same
                 # between models. For example, its common in Pulsar to have a Library named the
                 # same as the Biosample it belongs to.
                 alias_name = models.Model.PULSAR_LIMS_PREFIX + pulsar_rec.MODEL_ABBR + "-" + name
@@ -701,37 +702,80 @@ class Submit():
         raise Exception("Vendors must be registered directly by the DCC personel.")
 
 
-    def post_ip_lane(self, immunoblot_id, biosample_id, patch=False)
+    def post_ip_lane(self, immunoblot_id, biosample_id, patch=False):
         """
         This method makes the assumption that a given gel won't have more than one lane with the same
         Biosample.
         """
+        GEL_IMAGE_DIR = os.path.join(os.path.curdir, "gel_images")
+        if not os.path.exists(GEL_IMAGE_DIR):
+            os.mkdir(GEL_IMAGE_DIR)
+
         biosample = models.Biosample(biosample_id)
         if not biosample.crispr_modification_id:
             print("Biosample {} missing CrisprModification".format(biosample_id))
             return 
-        crispr_modification = models.biosample.crispr_modification_id
+        crispr_modification = models.CrisprModification(biosample.crispr_modification_id)
         if not crispr_modification.upstream_identifier:
             print("Biosample {} has a CrisprModification, but it isn't yet registered on the Portal.".format(biosample_id))
             return
         ip = models.Immunoblot(immunoblot_id)
         # There should only be 1 Gel, even though the Rails Immunoblot model allows many - on the to fix list. 
+        if not ip.gel_ids:
+            print("IP {} for Biosample {} does not have a Gel.".format(ip.id, biosample_id))
+            return
         gel = models.Gel(ip.gel_ids[0])
         gl = "" # GelLane
         for gel_lane_id in gel.gel_lane_ids:
-            gel_lane = m.GelLane(gel_lane_id)
+            gel_lane = models.GelLane(gel_lane_id)
             if biosample_id == gel_lane.biosample_id:
                 gl = gel_lane
         if not gl:
             raise Exception("Could't find a GelLane that has Biosample {} on Immunoblot {}.".format(biosample_id, immunoblot_id))
-        passed = gl.pass
-        if not gel.attrs["pass"]:
+        if not gl.attrs["pass"]:
+            print("GelLane didn't pass for Biosample {}.".format(biosample_id))
             return # Don't submit failed IPs. 
         payload = {}
         payload["characterization_method"] = "immunoblot"
         payload["characterizes"] = crispr_modification.upstream_identifier 
-        payload["review"] = {"lab": "richard-meyers"}
-        
+        payload["documents"] = self.post_documents(ip.document_ids)
+        payload["review"] = {"lab": "richard-myers"}
+        # Process attachment property for gel image.
+        # A Pulsar Gel object can have many GelImages (different exposure times), but Jess has indicated
+        # to take the first one if multiple are present. 
+        if not gel.gel_image_ids:
+            raise Exception("GelLane {} of Gel {} for Biosample {} is missing a GelImage.".format(gl.id, gel.id, biosample_id))
+        gel_image = models.GelImage(gel.gel_image_ids[0])
+        # The image URI is expected to have public read permission.
+        # Some paths store a // at the beginning to tell the browser to use the same protocol as it's currently
+        # using (HTTP/HTTPS). In that case, just prefix it with 'https:'.
+        image_uri = gel_image.image
+        if image_uri.startswith("//"):
+            image_uri = "https:" + image_uri
+        image_basename = os.path.basename(image_uri)
+        image_exists_locally = os.path.join(GEL_IMAGE_DIR, image_basename)
+        if not os.path.exists(image_exists_locally):
+            # Then download it
+            stream = requests.get(image_uri, stream=True)
+            fout = open(image_exists_locally, 'wb')
+            for line in stream.iter_content(chunk_size=512):
+                fout.write(line)
+            fout.close()
+        payload["attachment"] = {"path": image_exists_locally}
+        # Caption
+        #btn = models.BiosampleTermName(biosample.biosample_term_name_id).name
+        #crispr_construct = models.CrisprConstruct(crispr_modification.crispr_construct_ids[0])
+        #target = models.Target(crispr_construct.target_id)
+        #caption = "Immunoprecipitation was performed on nuclear extracts from biosample {}".format(biosample.upstream_identifier)
+        #caption += " {} {}-{}".format(btn, 
+        #payload["caption"] = caption
+
+        # Submit payload
+        if patch:  
+            upstream_id = self.patch(payload, gl.upstream_identifier)
+        else:
+            upstream_id = self.post(payload=payload, dcc_profile="genetic_modification_characterization", pulsar_model=models.GelLane, pulsar_rec_id=gl.id)
+        return upstream_id
 
     def post_biosample(self, rec_id, patch=False):
         rec = models.Biosample(rec_id)
