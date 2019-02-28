@@ -700,6 +700,39 @@ class Submit():
         """
         raise Exception("Vendors must be registered directly by the DCC personel.")
 
+
+    def post_ip_lane(self, immunoblot_id, biosample_id, patch=False)
+        """
+        This method makes the assumption that a given gel won't have more than one lane with the same
+        Biosample.
+        """
+        biosample = models.Biosample(biosample_id)
+        if not biosample.crispr_modification_id:
+            print("Biosample {} missing CrisprModification".format(biosample_id))
+            return 
+        crispr_modification = models.biosample.crispr_modification_id
+        if not crispr_modification.upstream_identifier:
+            print("Biosample {} has a CrisprModification, but it isn't yet registered on the Portal.".format(biosample_id))
+            return
+        ip = models.Immunoblot(immunoblot_id)
+        # There should only be 1 Gel, even though the Rails Immunoblot model allows many - on the to fix list. 
+        gel = models.Gel(ip.gel_ids[0])
+        gl = "" # GelLane
+        for gel_lane_id in gel.gel_lane_ids:
+            gel_lane = m.GelLane(gel_lane_id)
+            if biosample_id == gel_lane.biosample_id:
+                gl = gel_lane
+        if not gl:
+            raise Exception("Could't find a GelLane that has Biosample {} on Immunoblot {}.".format(biosample_id, immunoblot_id))
+        passed = gl.pass
+        if not gel.attrs["pass"]:
+            return # Don't submit failed IPs. 
+        payload = {}
+        payload["characterization_method"] = "immunoblot"
+        payload["characterizes"] = crispr_modification.upstream_identifier 
+        payload["review"] = {"lab": "richard-meyers"}
+        
+
     def post_biosample(self, rec_id, patch=False):
         rec = models.Biosample(rec_id)
         # The alias lab prefixes will be set in the encode_utils package if the DCC_LAB environment
