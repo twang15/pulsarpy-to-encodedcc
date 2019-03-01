@@ -745,7 +745,7 @@ class Submit():
         # to take the first one if multiple are present. 
         if not gel.gel_image_ids:
             raise Exception("GelLane {} of Gel {} for Biosample {} is missing a GelImage.".format(gl.id, gel.id, biosample_id))
-        gel_image = models.GelImage(gel.gel_image_ids[0])
+        gel_image = models.GelImage(sorted(gel.gel_image_ids)[0])
         # The image URI is expected to have public read permission.
         # Some paths store a // at the beginning to tell the browser to use the same protocol as it's currently
         # using (HTTP/HTTPS). In that case, just prefix it with 'https:'.
