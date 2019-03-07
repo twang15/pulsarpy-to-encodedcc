@@ -33,7 +33,7 @@ import sys
 import dxpy
 
 import pulsarpy_to_encodedcc
-from pulsarpy_to_encodedcc import FASTQ_FOLDER
+from pulsarpy_to_encodedcc import FASTQ_FOLDER, log_error
 from pulsarpy import models
 import pulsarpy.utils
 import encode_utils as eu
@@ -47,6 +47,12 @@ error_logger = logging.getLogger(pulsarpy_to_encodedcc.ERROR_LOGGER_NAME)
 # regex for finding one or more continuous spaces
 space_reg = re.compile(r' +')
 
+
+class IpLaneException(Exception):
+    """
+    Raised when posting an IP. The is a temporary class that'll be removed once the exceptions
+    are handled property in the Submit.post_ip_lane method. 
+    """
 
 class ExpMissingReplicates(Exception):
     """
@@ -407,7 +413,7 @@ class Submit():
             input_ids.extend(pulsar_exp.control_replicate_ids) # Biosample records.
         if not input_ids:
             msg = "Can't submit {} control exp. for {}: no replicates.".format(experiment_type, pulsar_exp.abbrev_id())
-            pulsarpy_to_encodedcc.log_error(msg)
+            log_error(msg)
             raise ExpMissingReplicates(msg)
         inputs = [models.Biosample(x) for x in input_ids]
         dcc_exp = ""
@@ -470,7 +476,7 @@ class Submit():
         target_upstream = target.upstream_identifier
         if not target_upstream:
             msg = "Target {} missing upstream identifier.".format(target.abbrev_id())
-            pulsarpy_to_encodedcc.log_error(msg)
+            log_error(msg)
             raise MissingTargetUpstream(msg)
         payload["target"] = target.upstream_identifier
         #payload["description"] = pulsar_exp.description.strip()
@@ -567,7 +573,7 @@ class Submit():
         target_upstream = dc_target.upstream_identifier
         if not target_upstream:
             msg = "Target {} missing upstream identifier.".format(dc_target.abbrev_id())
-            pulsarpy_to_encodedcc.log_error(msg)
+            log_error(msg)
             raise MissingTargetUpstream(msg)
 
         payload = {}
@@ -713,17 +719,14 @@ class Submit():
 
         biosample = models.Biosample(biosample_id)
         if not biosample.crispr_modification_id:
-            print("Biosample {} missing CrisprModification".format(biosample_id))
-            return 
+            raise IpLaneException("Biosample {} missing CrisprModification".format(biosample_id))
         crispr_modification = models.CrisprModification(biosample.crispr_modification_id)
         if not crispr_modification.upstream_identifier:
-            print("Biosample {} has a CrisprModification, but it isn't yet registered on the Portal.".format(biosample_id))
-            return
+            raise IpLaneException("Biosample {} has a CrisprModification, but it isn't yet registered on the Portal.".format(biosample_id))
         ip = models.Immunoblot(immunoblot_id)
         # There should only be 1 Gel, even though the Rails Immunoblot model allows many - on the to fix list. 
         if not ip.gel_ids:
-            print("IP {} for Biosample {} does not have a Gel.".format(ip.id, biosample_id))
-            return
+            raise IpLaneException("IP {} for Biosample {} does not have a Gel.".format(ip.id, biosample_id))
         gel = models.Gel(ip.gel_ids[0])
         gl = "" # GelLane
         for gel_lane_id in gel.gel_lane_ids:
@@ -733,8 +736,7 @@ class Submit():
         if not gl:
             raise Exception("Could't find a GelLane that has Biosample {} on Immunoblot {}.".format(biosample_id, immunoblot_id))
         if not gl.attrs["pass"]:
-            print("GelLane didn't pass for Biosample {}.".format(biosample_id))
-            return # Don't submit failed IPs. 
+            raise IpLaneException("GelLane didn't pass for Biosample {}.".format(biosample_id))
         payload = {}
         payload["characterization_method"] = "immunoblot"
         payload["characterizes"] = crispr_modification.upstream_identifier 
@@ -744,7 +746,7 @@ class Submit():
         # A Pulsar Gel object can have many GelImages (different exposure times), but Jess has indicated
         # to take the first one if multiple are present. 
         if not gel.gel_image_ids:
-            raise Exception("GelLane {} of Gel {} for Biosample {} is missing a GelImage.".format(gl.id, gel.id, biosample_id))
+            raise IpLaneException("GelLane {} of Gel {} for Biosample {} is missing a GelImage.".format(gl.id, gel.id, biosample_id))
         gel_image = models.GelImage(sorted(gel.gel_image_ids)[0])
         # The image URI is expected to have public read permission.
         # Some paths store a // at the beginning to tell the browser to use the same protocol as it's currently

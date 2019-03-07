@@ -115,7 +115,10 @@ def biosample(rec_id, patch=False):
         in Pulsar, otherwise the POST response.
     """
     dcc_rec = ENC_CONN.get(rec_id, ignore404=False)
-    aliases = dcc_rec[ALIASES_PROP]
+    try:
+        aliases = dcc_rec[ALIASES_PROP]
+    except KeyError: 
+        aliases = []
     accession = dcc_rec[ACCESSION_PROP]
     # Check if upstream exists already in Pulsar:
     pulsar_rec = models.Biosample.find_by({UPSTREAM_PROP: [*aliases, accession, dcc_rec[UUID_PROP], dcc_rec["@id"]]})
@@ -124,12 +127,13 @@ def biosample(rec_id, patch=False):
     payload = {}
     payload[UPSTREAM_PROP] = accession
     payload["name"] = set_name(dcc_rec)
-    btn = dcc_rec["biosample_term_name"]
-    bti = dcc_rec["biosample_term_id"]
+    bo = dcc_rec["biosample_ontology"]
+    btn = bo["term_name"]
+    bti = bo["term_id"]
     pulsar_btn_rec = biosample_term_name(biosample_term_name=btn, biosample_term_id=bti)
     payload["biosample_term_name_id"] = pulsar_btn_rec["id"]
     # biosample_type should already be in Pulsar.biosample_type, so won't check to add it first.
-    payload["biosample_type_id"] = models.BiosampleType.find_by({"name": dcc_rec["biosample_type"]})["id"]
+    payload["biosample_type_id"] = models.BiosampleType.find_by({"name": bo["classification"]})["id"]
     date_obtained = dcc_rec.get("date_obtained")
     if not date_obtained:
         date_obtained = dcc_rec.get("culture_harvest_date")
@@ -141,8 +145,16 @@ def biosample(rec_id, patch=False):
     part_of_biosample = dcc_rec.get("part_of")
     if part_of_biosample:
        # Backport the parent.
-       pulsar_parent = biosample(part_of_biosample)
-       payload["part_of_biosample_id"] = pulsar_parent["id"]
+       pulsar_parent = biosample(part_of_biosample["accession"]) # The record in Pulsar
+       payload["part_of_id"] = pulsar_parent["id"]
+    pooled_from_biosamples = dcc_rec.get("pooled_from")
+    if pooled_from_biosamples:
+       payload["pooled_from_biosample_ids"] = []
+       # Backport these
+       for p in pooled_from_biosamples:
+           pulsar_parent = biosample(p["accession"]) # The record in Pulsar
+           payload["pooled_from_biosample_ids"].append(pulsar_parent["id"])
+           
     payload["tissue_preservation_method"] = dcc_rec.get("preservation_method")
     payload["passage_number"] = dcc_rec.get("passage_number")
     payload["starting_amount"] = dcc_rec.get("starting_amount")
