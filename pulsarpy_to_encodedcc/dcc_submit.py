@@ -710,14 +710,26 @@ class Submit():
 
     def post_ip_lane(self, immunoblot_id, biosample_id, patch=False):
         """
+        Only submit these after the CrisprModifications has been submitted. Even though some Biosamples
+        have a successful IP, they don't all need to be submitted. For example, in one case a Biosample
+        was lost after a successful IP and hence couldn't do the crosslinking for ChIP later on.
+        Another reason may be that we already have enough validated Biosamples to submit.
+
         This method makes the assumption that a given gel won't have more than one lane with the same
         Biosample.
+
+        Returns:
+            None if the Biosmaple isn't already registered on the Portal, otherwise, the ENCODE
+            ID of the created object.
         """
         GEL_IMAGE_DIR = os.path.join(os.path.curdir, "gel_images")
         if not os.path.exists(GEL_IMAGE_DIR):
             os.mkdir(GEL_IMAGE_DIR)
 
         biosample = models.Biosample(biosample_id)
+        if not biosample.upstream_identifier:
+            return None
+            
         if not biosample.crispr_modification_id:
             raise IpLaneException("Biosample {} missing CrisprModification".format(biosample_id))
         crispr_modification = models.CrisprModification(biosample.crispr_modification_id)
@@ -765,12 +777,17 @@ class Submit():
             fout.close()
         payload["attachment"] = {"path": image_exists_locally}
         # Caption
-        #btn = models.BiosampleTermName(biosample.biosample_term_name_id).name
-        #crispr_construct = models.CrisprConstruct(crispr_modification.crispr_construct_ids[0])
-        #target = models.Target(crispr_construct.target_id)
-        #caption = "Immunoprecipitation was performed on nuclear extracts from biosample {}".format(biosample.upstream_identifier)
-        #caption += " {} {}-{}".format(btn, 
-        #payload["caption"] = caption
+        btn = models.BiosampleTermName(biosample.biosample_term_name_id).name
+        crispr_construct = models.CrisprConstruct(crispr_modification.crispr_construct_ids[0])
+        target = models.Target(crispr_construct.target_id)
+        caption = "Immunoprecipitation was performed on nuclear extracts from biosample {}".format(biosample.upstream_identifier)
+        caption += " ({} eGFP-{} {})".format(btn, target.name)
+        caption += " cells using anti-eGFP antibody. The image shows western blot analysis of input"
+        caption += " (lane 1), immunoprecipitate (lane 2), and mock immunoprecipitate using IgG"
+        caption += " (lane 3). Protein Marker (Bio-Rad, cat. # 161-0374) is labeled in kD. The"
+        caption += " target molecular weight is {} kD as indicated with an arrow.".format(gl.expected_product_size)
+       
+        payload["caption"] = caption
 
         # Submit payload
         if patch:  
