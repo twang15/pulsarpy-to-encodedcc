@@ -802,9 +802,10 @@ class Submit():
         # variable is set.
         payload = {}
         # Add biosample_term_name, biosample_term_id, biosample_type props
-        payload["biosample_ontology"] = rec.biosample_term_name
-
+        btn = models.BiosampleTermName(rec.biosample_term_name_id)
         bty = models.BiosampleType(rec.biosample_type_id)
+        payload["biosample_ontology"] = self.ENC_CONN.get_biosample_type(classification=bty.name, term_id=btn.accession)["@id"]
+
         date_biosample_taken = rec.date_biosample_taken
         if date_biosample_taken:
             if bty.name == "tissue":
