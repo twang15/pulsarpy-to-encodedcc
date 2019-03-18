@@ -32,13 +32,15 @@ def get_parser():
         The ID of the ENCODE profile to submit to, i.e. use 'genetic_modification' for                            
         https://www.encodeproject.org/profiles/genetic_modification.json. Must be a value from the set
         {}""".format(list(MODEL_PROFILE.keys())))
-    parser.add_argument("-i", "--infile", required=True, help="""
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument("-i", "--infile", help="""
         The input file containing Pulsar record identifiers, one per row. The record identifiers should belong to
         a Pulsar model that is the equivalent of the DCC profile specified by --profile-id.  For example,
         if submitting Pulsar records to the ENCODE 'biosample' profile, the equivalent model in Pulsar is
         Biosample, thus your record identifiers in this file should thus be Biosample identifiers. Note that
         the record identifier to use must be either the record ID or record name if POSTING, or can additionally
         be the value of the Pulsar record's upstream_identifier attribute if PATCHING.""")
+    input_group.add_argument("--ids", nargs="+", help="One or more Pulsar record identifiers.")
     parser.add_argument("--no-extend-arrays", action="store_true", help="""
         Only affects updating objects on the ENCODE Portal. By default, when updating an array
         attribute, the array will be extended with the provided values from the input file. However,
@@ -56,19 +58,21 @@ def main():
     dcc_mode = args.dcc_mode
     dcc_profile = args.profile_id
     infile = args.infile
+    ids = args.ids
 
     submit = dcc_submit.Submit(dcc_mode=dcc_mode, extend_arrays=not no_extend_arrays)
     post_method_name = "post_" + inflection.underscore(MODEL_PROFILE[dcc_profile])
     post_method = getattr(submit, post_method_name)
 
-    fh = open(infile, 'r')
-    rec_ids = []
-    for line in fh:
-        line = line.strip()
-        if not line:
-            continue
-        rec_ids.append(line)
-    fh.close()
+    rec_ids = ids
+    if not rec_ids:
+        fh = open(infile, 'r')
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            rec_ids.append(line)
+        fh.close()
 
     for i in rec_ids:
         post_method(rec_id=i, patch=patch)
