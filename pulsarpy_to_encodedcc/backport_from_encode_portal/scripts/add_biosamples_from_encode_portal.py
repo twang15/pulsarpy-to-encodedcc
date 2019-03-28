@@ -8,54 +8,59 @@
 ###
 
 """
-Backports biosamples from the ENCODE Portal. A search URL for the ENCODE Portal must be given
-in order to designate which biosamples to backport.  
+Backports biosamples from the ENCODE Portal. Biosample identifiers on the ENCODE Portal can be 
+provided in one of three ways:
+
+    1. An input file with one ID per line. 
+    2. On the command-line.
+    3. Via an ENCODE Portal search URL.   
 """
 
 import argparse
 import pdb
 
-import pulsarpy.models
-from encode_utils.connection import Connection
-import encode_utils.profiles as eup
+import encode_utils.connection as euc
+import pulsarpy_to_encodedcc.backport_from_encode_portal.backport as backport
 
+ENC_CONN = euc.Connection("prod")
 # Note that ex_url below has a double '%', where the second is used to escape the original. 
 ex_url = "https://www.encodeproject.org/search/?type=Biosample&lab.title=Michael+Snyder%%2C+Stanford&award.rfa=ENCODE4&biosample_type=tissue"
 
 def get_parser():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument("-u", "--url", required=True, help="""
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-u", "--url", help="""
     A search URL (wrapped in quotation marks to avoid shell expansion, to indicate which biosamples to import, i.e. {}.""".format(ex_url))
+    group.add_argument("-i", "--infile", help="File containing biosample record IDs, one per line.")
+    group.add_argument("-r", "--rec-ids", nargs="+", help="One or more biosample record identifiers separated by a space.")
     return parser
 
-
-def create_payload(rec_json):
-    payload = {}
-    payload["aliases"] = rec_json["aliases"]
-    payload["description"] = rec_json["summary"]
-    payload["submitter_comments"] = rec_json["submitter_comment"]
-
-    payload["date_biosample_taken"] = rec_json["date_obtained"]
-    payload["documents"] = rec_json["documents"]
-    payload["donor"] = rec_json["donor"] 
-    #payload["genetic_modifications"] = rec_json[
-    payload["treatments"] = rec_json["documents"]
-
 def main():
-    biosample_profile = eup.Profile("biosample")
     parser = get_parser()
     args = parser.parse_args()
     url = args.url
-    conn = Connection("prod")
-    res = conn.search(url=url)
-    for record in res: # i is a JSON object.
-        # GET the object. Only part of the object is given in the search results. For example, 
-        # the property 'genetic_modifications' isn't present. 
-        rec_id = record["@id"]
-        json_rec = conn.get(rec_id)
-        json_rec = biosample_profile.filter_non_writable_props(json_rec, keep_identifying=True) 
-        pdb.set_trace()
-        payload = create_payload(json_rec)
+    infile = args.infile
+    rec_ids = args.rec_ids
+    inputs = []
+    if infile:
+        with open(infile) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                inputs.append(line)
+    elif rec_ids:
+        inputs = rec_ids
+    else:
+        res = ENC_CONN.search(url=url)
+        for record in res: # i is a JSON object.
+            # GET the object. Only part of the object is given in the search results. For example, 
+            # the property 'genetic_modifications' isn't present. 
+            inputs.append(record["@id"])
+
+    for i in inputs:
+        print("Backporting Biosample {}".format(i))
+        backport.biosample(rec_id=i)
         
      
 if __name__ == "__main__":
