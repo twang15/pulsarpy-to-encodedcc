@@ -707,6 +707,122 @@ class Submit():
         """
         raise Exception("Vendors must be registered directly by the DCC personel.")
 
+    def post_ip_biosample_characterization(self, immunoblot_id, biosample_id, patch=False):
+        """
+        Submits a Pulsar Immunoblot for a specific lane (biosample) on a Gel to the ENCODE biosample_characterization
+        profile. Such an immunoblot is used to show whether the eGFP-tagged target (using CRISPR) 
+        is expressed (has a band in the size range of the expected taget size).
+        Only submit these after the ChipSeq experiment (and hence CrisprModification) has been submitted. Even though some Biosamples
+        have a successful IP, they don't all need to be submitted. For example, in one case a Biosample
+        was lost after a successful IP and hence couldn't do the crosslinking for ChIP later on.
+        Another reason may be that we already have enough validated Biosamples to submit.
+
+        This method makes the assumption that a given gel won't have more than one lane with the same
+        Biosample.
+
+        Returns:
+            None if the Biosmaple isn't already registered on the Portal, otherwise, the ENCODE
+            ID of the created object.
+        """
+        GEL_IMAGE_DIR = os.path.join(os.path.curdir, "gel_images")
+        if not os.path.exists(GEL_IMAGE_DIR):
+            os.mkdir(GEL_IMAGE_DIR)
+
+        biosample = models.Biosample(biosample_id)
+        if not biosample.upstream_identifier:
+            return None
+            
+        if not biosample.crispr_modification_id:
+            raise IpLaneException("Biosample {} missing CrisprModification".format(biosample_id))
+        crispr_modification = models.CrisprModification(biosample.crispr_modification_id)
+        if not crispr_modification.upstream_identifier:
+            raise IpLaneException("Biosample {} has a CrisprModification, but it isn't yet registered on the Portal.".format(biosample_id))
+        if not biosample.chipseq_experiment_ids:
+            raise IpLaneException("Biosample {} is not linked to any ChipSeq experiments.".format(biosample_id))
+        elif len(biosample.chipseq_experiment_ids) > 1:
+            raise IpLaneException("Biosample {} is linked to more than 1 ChipSeq experiment. It is not known as to which one this IP relates.".format(biosample_id))
+        chipseq_exp = models.ChipseqExperiment(biosample.chipseq_experiment_ids[0])
+        if not chipseq_exp.upstream_identifier:
+            raise IpLaneException("ChipSeq experiment {} for Biosample {} needs to be submitted prior to submitting the IP biosample_characterization.".format(chipseq_exp.id, biosample_id))
+        # Get biosample_replicate_number on experiment in Portal
+        rep_hash = encode_utils.replicate.ExpReplicates(self.ENC_CONN, chipseq_exp.upstream_identifier)["rep_hash"]
+        brn = rep_hash[chipseq_exp.upstream_identifier]["brn"]
+
+        ip = models.Immunoblot(immunoblot_id)
+        # There should only be 1 Gel, even though the Rails Immunoblot model allows many - on the to fix list. 
+        if not ip.gel_ids:
+            raise IpLaneException("IP {} for Biosample {} does not have a Gel.".format(ip.id, biosample_id))
+        gel = models.Gel(ip.gel_ids[0])
+        gl = "" # GelLane
+        for gel_lane_id in gel.gel_lane_ids:
+            gel_lane = models.GelLane(gel_lane_id)
+            if biosample_id == gel_lane.biosample_id:
+                gl = gel_lane
+        if not gl:
+            raise IpLaneException("Could't find a GelLane that has Biosample {} on Immunoblot {}.".format(biosample_id, immunoblot_id))
+        if not gl.attrs["pass"]:
+            raise IpLaneException("GelLane didn't pass for Biosample {}.".format(biosample_id))
+        if not gl.expected_product_size:
+            raise IpLaneException("GelLane ID {} is missing a value for expected target size, which is required for the caption.".format(gl.id))
+
+        # Find WT Biosample
+        wt_parent_id = biosample.find_first_wt_parent()
+        if not wt_parent_id:
+            raise MissingWtParentException("Can't submit IP biosample_characterization for Biosample {} IP {} since the Biosample parent ancestry line doesn't include a wild type parent.".format(biosample.id, immunoblot_id))
+        wt_parent = models.Biosample(wt_parent_id)
+        wt_parent_upstream = wt_parent.upstream_identifier
+        if not wt_parent_upstream:
+            wt_parent_upstream = self.post_biosample(wt_parent_id)
+        
+        payload = {}
+        payload["wildtype_biosample"] = wt_parent_upstream
+        payload["characterization_method"] = "immunoblot"
+        payload["characterizes"] = biosample.upstream_identifier
+        payload["documents"] = self.post_documents(ip.document_ids)
+        payload["review"] = {"lab": "richard-myers", "lane": gl.lane_number}
+        # Process attachment property for gel image.
+        # A Pulsar Gel object can have many GelImages (different exposure times), but Jess has indicated
+        # to take the first one if multiple are present. 
+        if not gel.gel_image_ids:
+            raise IpLaneException("GelLane {} of Gel {} for Biosample {} is missing a GelImage.".format(gl.id, gel.id, biosample_id))
+        gel_image = models.GelImage(sorted(gel.gel_image_ids)[0])
+        # The image URI is expected to have public read permission.
+        # Some paths store a // at the beginning to tell the browser to use the same protocol as it's currently
+        # using (HTTP/HTTPS). In that case, just prefix it with 'https:'.
+        image_uri = gel_image.image
+        if image_uri.startswith("//"):
+            image_uri = "https:" + image_uri
+        image_basename = os.path.basename(image_uri)
+        image_exists_locally = os.path.join(GEL_IMAGE_DIR, image_basename)
+        if not os.path.exists(image_exists_locally):
+            # Then download it
+            stream = requests.get(image_uri, stream=True)
+            fout = open(image_exists_locally, 'wb')
+            for line in stream.iter_content(chunk_size=512):
+                fout.write(line)
+            fout.close()
+        payload["attachment"] = {"path": image_exists_locally}
+        # Caption
+        btn = models.BiosampleTermName(biosample.biosample_term_name_id).name
+        crispr_construct = models.CrisprConstruct(crispr_modification.crispr_construct_ids[0])
+        target = models.Target(crispr_construct.target_id)
+        caption = "Immunoprecipitation was performed on nuclear extracts from biosample {}".format(biosample.upstream_identifier)
+        caption += " ({} eGFP-{} replicate {})".format(btn, target.name, brn)
+        caption += " cells using anti-eGFP antibody. The image shows western blot analysis of input"
+        caption += " (lane 1), immunoprecipitate (lane 2), and mock immunoprecipitate using IgG"
+        caption += " (lane 3). Molecular weight standard (Bio-Rad, cat. # 161-0374) contains 10"
+        caption += " pre-stained recombinant proteins (250, 150, 100, 75, 50, 37, 25, 20, 15, and 10 kD)."
+        caption += " The target molecular weight is {} kD as indicated with an arrow.".format(gl.expected_product_size)
+        caption += " Lower size bands which might due to potential degradation products are marked with asterisks."
+       
+        payload["caption"] = caption
+
+        # Submit payload
+        if patch:  
+            upstream_id = self.patch(payload, gl.upstream_identifier)
+        else:
+            upstream_id = self.post(payload=payload, dcc_profile="biosample_characterization", pulsar_model=models.GelLane, pulsar_rec_id=gl.id)
+        return upstream_id
 
     def post_ip_lane(self, immunoblot_id, biosample_id, patch=False):
         """
