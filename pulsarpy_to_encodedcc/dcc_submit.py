@@ -730,6 +730,8 @@ class Submit():
 
         biosample = models.Biosample(biosample_id)
         if not biosample.upstream_identifier:
+            # For now, don't sumbit until jadrian says otherwise. 
+            print("Biosample missing upstream - skipping.")
             return None
             
         if not biosample.crispr_modification_id:
@@ -745,8 +747,8 @@ class Submit():
         if not chipseq_exp.upstream_identifier:
             raise IpLaneException("ChipSeq experiment {} for Biosample {} needs to be submitted prior to submitting the IP biosample_characterization.".format(chipseq_exp.id, biosample_id))
         # Get biosample_replicate_number on experiment in Portal
-        rep_hash = encode_utils.replicate.ExpReplicates(self.ENC_CONN, chipseq_exp.upstream_identifier)["rep_hash"]
-        brn = rep_hash[chipseq_exp.upstream_identifier]["brn"]
+        rep_hash = encode_utils.replicate.ExpReplicates(self.ENC_CONN, chipseq_exp.upstream_identifier).rep_hash
+        brn = rep_hash[biosample.upstream_identifier]["brn"]
 
         ip = models.Immunoblot(immunoblot_id)
         # There should only be 1 Gel, even though the Rails Immunoblot model allows many - on the to fix list. 
