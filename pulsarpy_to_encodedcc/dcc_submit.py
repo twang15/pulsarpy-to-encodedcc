@@ -767,14 +767,25 @@ class Submit():
         if not gl.expected_product_size:
             raise IpLaneException("GelLane ID {} is missing a value for expected target size, which is required for the caption.".format(gl.id))
 
-        # Find WT Biosample
-        wt_parent_id = biosample.find_first_wt_parent()
-        if not wt_parent_id:
-            raise MissingWtParentException("Can't submit IP biosample_characterization for Biosample {} IP {} since the Biosample parent ancestry line doesn't include a wild type parent.".format(biosample.id, immunoblot_id))
-        wt_parent = models.Biosample(wt_parent_id)
-        wt_parent_upstream = wt_parent.upstream_identifier
-        if not wt_parent_upstream:
-            wt_parent_upstream = self.post_biosample(wt_parent_id)
+        if not biosample.wild_type:
+            # Find WT parent that has an associated Immunoblot to use as control
+            # and set that Biosample's upstream_identifier as the value of the ENCODE property 
+            # biosample_characterization.wildtype_biosample.
+            while True:
+                wt_parent_id = biosample.find_first_wt_parent(with_ip=True)
+            if not wt_parent_id:
+                raise MissingWtParentException("Can't submit IP biosample_characterization for Biosample {} IP {} since the Biosample parent ancestry line doesn't include a wild type parent.".format(biosample.id, immunoblot_id))
+            wt_parent = models.Biosample(wt_parent_id)
+            wt_parent_upstream = wt_parent.upstream_identifier
+            if not wt_parent_upstream:
+                print("POSTING WT parent Biosample.")
+                wt_parent_upstream = self.post_biosample(wt_parent_id)
+                # Then POST the Immunoblot linked to the WT Parent Biosample. Note that it's possible
+                # but unlikely for a Biosample to be linked to multiple Immunoblots. In that case, the
+                # first one will be submitted. 
+                wt_ip_id = wt_parent.immunoblot_ids[0]
+                print("POSTING WT parent Biosample's Immunoblot.")            
+                self.post_ip_biosample_characterization(immunoblot_id=wt_ip_id, biosample_id=wt_parent_id, patch=False):
         
         payload = {}
         payload["wildtype_biosample"] = wt_parent_upstream
