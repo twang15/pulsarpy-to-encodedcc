@@ -762,6 +762,8 @@ class Submit():
         Returns:
             `None`: The Biosmaple isn't already registered on the Portal.
             `None`: The Biosample has an IP, but not one that passes (based on the GelLane.pass attribute)
+            `None`: The Non-WT Biosample isn't yet registerd on the Portal
+            `None`: The non-WT biosample that doesn't have a ChipSeq object.
             `int`: The ID of the created biosample_characterization record on the Portal. 
         """
         GEL_IMAGE_DIR = os.path.join(os.path.curdir, "gel_images")
@@ -795,7 +797,9 @@ class Submit():
             elif biosample_term_name == "SK-N-SH":
                 wt_biosample_id = 11200
             else:
-                raise MissingWtParentException("Can't submit IP biosample_characterization for Biosample {} IP {} since the wild type biosample with its own Immunoblot can't be determined for biosample term name {}.".format(biosample.id, immunoblot_id, biosample_term_name))
+                msg = "Can't submit IP biosample_characterization for Biosample {} IP {} since the wild type biosample with its own Immunoblot can't be determined for biosample term name {}.".format(biosample.id, immunoblot_id, biosample_term_name)
+                error_logger.error(msg)
+                return None
             wt_biosample = models.Biosample(wt_biosample_id)
             wt_biosample_upstream = wt_biosample.upstream_identifier
             if not wt_biosample_upstream:
@@ -818,7 +822,9 @@ class Submit():
         # to take the first one if multiple are present. 
         gel = models.Gel(gl.gel_id)
         if not gel.gel_image_ids:
-            raise IpLaneException("GelLane {} of Gel {} for Biosample {} is missing a GelImage.".format(gl.id, gel.id, biosample_id))
+            msg = "GelLane {} of Gel {} for Biosample {} is missing a GelImage.".format(gl.id, gel.id, biosample_id)
+            error_logger.error(msg)
+            raise IpLaneException(msg)
         gel_image = models.GelImage(sorted(gel.gel_image_ids)[0])
         # The image URI is expected to have public read permission.
         # Some paths store a // at the beginning to tell the browser to use the same protocol as it's currently
@@ -843,15 +849,24 @@ class Submit():
             caption += " ({} wild type)".format(btn)
         else:
             if not biosample.chipseq_experiment_ids:
-                raise IpLaneException("Biosample {} is not linked to any ChipSeq experiments.".format(biosample_id))
+                msg = "Biosample {} is not linked to any ChipSeq experiments.".format(biosample_id)
+                error_logger.error(msg)
+                return None
+                #raise IpLaneException(msg)
             elif len(biosample.chipseq_experiment_ids) > 1:
-                raise IpLaneException("Biosample {} is linked to more than 1 ChipSeq experiment. It is not known as to which one this IP relates.".format(biosample_id))
+                msg = "Biosample {} is linked to more than 1 ChipSeq experiment. It is not known as to which one this IP relates.".format(biosample_id)
+                error_logger.error(msg)
+                raise IpLaneException(msg)
             chipseq_exp = models.ChipseqExperiment(biosample.chipseq_experiment_ids[0])
             if not chipseq_exp.upstream_identifier:
-                raise IpLaneException("ChipSeq experiment {} for Biosample {} needs to be submitted prior to submitting the IP biosample_characterization.".format(chipseq_exp.id, biosample_id))
+                msg = "ChipSeq experiment {} for Biosample {} needs to be submitted prior to submitting the IP biosample_characterization.".format(chipseq_exp.id, biosample_id)
+                error_logger.error(msg)
+                raise IpLaneException(msg)
             crispr_modification = models.CrisprModification(biosample.crispr_modification_id)
             if not crispr_modification.upstream_identifier:
-                raise IpLaneException("Biosample {} has a CrisprModification, but it isn't yet registered on the Portal.".format(biosample_id))
+                msg = "Biosample {} has a CrisprModification, but it isn't yet registered on the Portal.".format(biosample_id)
+                error_logger.error(msg)
+                raise IpLaneException(msg)
             crispr_construct = models.CrisprConstruct(crispr_modification.crispr_construct_ids[0])
             target = models.Target(crispr_construct.target_id)
             # Get biosample_replicate_number on experiment in Portal
