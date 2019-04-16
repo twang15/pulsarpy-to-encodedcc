@@ -790,6 +790,8 @@ class Submit():
             biosample_term_name = models.BiosampleTermName(biosample.biosample_term_name_id).name
             if biosample_term_name == "A549":
                 wt_biosample_id = 2551
+            elif biosample_term_name == "GM23338":
+                wt_biosample_id = 2559
             elif biosample_term_name == "HepG2":
                 wt_biosample_id = 2510
             elif biosample_term_name == "MCF-7":
