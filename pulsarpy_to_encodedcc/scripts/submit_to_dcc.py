@@ -66,6 +66,7 @@ def main():
 
     rec_ids = ids
     if not rec_ids:
+        rec_ids = []
         fh = open(infile, 'r')
         for line in fh:
             line = line.strip()
