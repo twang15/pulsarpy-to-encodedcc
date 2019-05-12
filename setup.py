@@ -35,7 +35,7 @@ setup(
   ],
   description = "Client for submitting experiments in Pulsar LIMS to the ENCODE Portal",
   install_requires = [
-    "dxpy",
+    "dxpy3",
     "encode-utils",
     "pulsarpy",
     "inflection",
