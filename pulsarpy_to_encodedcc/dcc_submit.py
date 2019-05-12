@@ -1036,9 +1036,9 @@ class Submit():
         for a specifc biosample and library combination, and if so then that repicate's JSON from 
         the ENCODE Portal is returned.
 
-        If the associated experiment is ChIP-seq, then the replicate will be submitted with a link 
-        to antibody ENCAB728YTO (AB-9 in Pulsar), which is the GFP-specific antibody used to pull
-        down GFP-tagged TFs. 
+        If the associated experiment is ChIP-seq, and isn't a control experpiment, then the 
+        replicate will be submitted with a link to antibody ENCAB728YTO (AB-9 in Pulsar), which is 
+        the GFP-specific antibody used to pull down GFP-tagged TFs. 
 
         Args:
             pulsar_library_id: `int`. The ID of a Library record in Pulsar.
@@ -1222,7 +1222,7 @@ class Submit():
         dcc_exp_type = dcc_exp["assay_term_name"] #i.e. ChIP-seq
         if dcc_exp_type == "ChIP-seq":
             if not bio.control and not bio.wild_type:
-                controlled_by = self.get_chipseq_controlled_by(pulsar_biosample=bio, read_num=read_num)
+                controlled_by = self.get_chipseq_controlled_by(pulsar_biosample=bio, read_num=read_num, dcc_exp_id=dcc_exp_accession)
                 if controlled_by:
                     # Will be empty if this is a already a control SequencingResult file.
                     payload["controlled_by"] = controlled_by
@@ -1252,7 +1252,7 @@ class Submit():
                 sres.patch({"read2_upstream_identifier": upstream_id})
         return upstream_id
         
-    def get_chipseq_controlled_by(self, pulsar_biosample, read_num):
+    def get_chipseq_controlled_by(self, pulsar_biosample, read_num, dcc_exp_id):
         """
         Given a p
         Returns:
@@ -1262,7 +1262,7 @@ class Submit():
             return []
         bio_id = pulsar_biosample.id
         controlled_by = []
-        chipseq_experiment = pulsarpy.models.ChipseqExperiment(pulsar_biosample.chipseq_experiment_id)
+        chipseq_experiment = pulsarpy.models.ChipseqExperiment(upstream=dcc_exp_id)
         # First add pooled input. Normally one control but could be more. 
         ctl_map = chipseq_experiment.paired_input_control_map() 
         if bio_id in ctl_map:
