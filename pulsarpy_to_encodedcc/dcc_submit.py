@@ -1261,7 +1261,8 @@ class Submit():
                     # Instead of raise an Exception, let it slide. Pulsar users aren't setting the 
                     # boolean fields control and wild_type_control as they should be so it's not reliable. 
         else:
-            raise Exception("There isn't yet support to set controlled_by for experiments of type {}.".format(dcc_exp_type))
+            if dcc_exp_type != "ATAC-seq":
+                raise Exception("There isn't yet support to set controlled_by for experiments of type {}.".format(dcc_exp_type))
 
         # POST to ENCODE Portal. Don't use post() method defined here that is a wrapper over 
         # `encode_utils.connection.Connection.post`, since the wrapper only works if the record we
