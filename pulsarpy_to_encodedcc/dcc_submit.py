@@ -617,7 +617,7 @@ class Submit():
             introduced_tags = [{"name": "eGFP", "location": "C-terminal"}]
         payload["introduced_tags"] = introduced_tags
         reagents = []
-        for i in [*ccs,dc]:
+        for i in ccs + [dc]:
             addgene_id = getattr(i, "addgene_id")
             if addgene_id:
                 r = {}
