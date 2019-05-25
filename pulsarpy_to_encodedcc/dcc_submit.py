@@ -430,7 +430,7 @@ class Submit():
             alias_prefix = "pPI-CTL_"
         alias = alias_prefix + alias 
         payload["aliases"] = [alias]
-        payload.update(self.get_exp_core_payload_props(pulsar_exp_json=pulsar_exp, assay_term_name="ChIP-seq"))
+        payload.update(self.get_exp_core_payload_props(pulsar_exp_rec=pulsar_exp, assay_term_name="ChIP-seq"))
         payload["description"] = "ChIP-seq on human " + payload["biosample_term_name"]
         payload["target"] = "Control-human"
   
@@ -465,7 +465,7 @@ class Submit():
         pulsar_exp = models.Atacseq(rec_id)
         pulsar_exp_upstream = pulsar_exp.upstream_identifier
         payload = {}
-        payload.update(self.get_exp_core_payload_props(pulsar_exp_json=pulsar_exp, assay_term_name="ATAC-seq"))
+        payload.update(self.get_exp_core_payload_props(pulsar_exp_rec=pulsar_exp, assay_term_name="ATAC-seq"))
         desc = pulsar_exp.description.strip()
         if desc:
             payload["description"] = desc
@@ -493,7 +493,7 @@ class Submit():
         pulsar_exp = models.ChipseqExperiment(rec_id)
         pulsar_exp_upstream = pulsar_exp.upstream_identifier
         payload = {}
-        payload.update(self.get_exp_core_payload_props(pulsar_exp_json=pulsar_exp, assay_term_name="ChIP-seq"))
+        payload.update(self.get_exp_core_payload_props(pulsar_exp_rec=pulsar_exp, assay_term_name="ChIP-seq"))
         target = models.Target(pulsar_exp.target_id)
         target_upstream = target.upstream_identifier
         if not target_upstream:
@@ -576,17 +576,23 @@ class Submit():
         for i in rep_ids:
             self.post_library_through_fastq(pulsar_library_id=i, dcc_exp_id=pulsar_exp.upstream_identifier)
 
-    def get_exp_core_payload_props(self, pulsar_exp_json, assay_term_name):
+    def get_exp_core_payload_props(self, pulsar_exp_rec, assay_term_name):
+        """
+        Args:
+            pulsar_exp_rec: `str`. `pulsarpy.models` subclass being either ChipSeq or Atacseq.
+            assay_term_name: `str`. Either 'ChIP-seq' or ATAC-seq.
+        """
         payload = {}
-        first_rep = models.Biosample(pulsar_exp_json.replicate_ids[0])
+        first_rep_library = models.Library(pulsar_exp_rec.replicate_ids[0])
+        first_rep_biosample = models.Biosample(first_rep_library.biosample_id)
         # Add biosample_term_name, biosample_term_id, and biosample_type props
-        btn = models.BiosampleTermName(first_rep.biosample_term_name_id)
-        bty = models.BiosampleType(first_rep.biosample_type_id)
+        btn = models.BiosampleTermName(first_rep_biosample.biosample_term_name_id)
+        bty = models.BiosampleType(first_rep_biosample.biosample_type_id)
         payload["biosample_ontology"] = self.ENC_CONN.get_biosample_type(classification=bty.name, term_id=btn.accession)["@id"]
         payload["assay_term_name"] = assay_term_name
-        payload["documents"] = self.post_documents(pulsar_exp_json.document_ids)
+        payload["documents"] = self.post_documents(pulsar_exp_rec.document_ids)
         payload["experiment_classification"] = ["functional genomics assay"]
-        submitter_comment = pulsar_exp_json.submitter_comments.strip()
+        submitter_comment = pulsar_exp_rec.submitter_comments.strip()
         if submitter_comment:
             payload["submitter_comment"] = submitter_comment
         return payload
