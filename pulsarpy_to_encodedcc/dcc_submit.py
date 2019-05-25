@@ -1108,8 +1108,8 @@ class Submit():
                 brn = exp_reps_instance.suggest_brn()
                 trn = 1
             else:
-                brn = exp_reps_instance.rep_hash[biosample.upstream_identifier]
-                trn = exp_reps_instance.suggest_trn(biosample.upstream_identifier)
+                brn = exp_reps_instance.rep_hash[biosample.upstream_identifier]["brn"]
+                trn = exp_reps_instance.suggest_trn(biosample.upstream_identifier)["brn"]
          
         if dcc_exp["assay_term_name"] == "ChIP-seq":
             # Only add antibody if not replicate on control experiment 
