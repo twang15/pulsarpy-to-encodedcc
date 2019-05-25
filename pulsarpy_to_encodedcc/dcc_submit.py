@@ -462,7 +462,7 @@ class Submit():
 
         Returns:
         """
-        pulsar_exp = models.ChipseqExperiment(rec_id)
+        pulsar_exp = models.Atacseq(rec_id)
         pulsar_exp_upstream = pulsar_exp.upstream_identifier
         payload = {}
         payload.update(self.get_exp_core_payload_props(pulsar_exp_json=pulsar_exp, assay_term_name="ATAC-seq"))
@@ -1095,9 +1095,22 @@ class Submit():
         # Check if replicate already exists for this library
         exp_reps_instance = encode_utils.replicate.ExpReplicates(self.ENC_CONN, dcc_exp_id)
         rep_json = exp_reps_instance.get_rep(biosample_accession=biosample.upstream_identifier, library_accession=lib.upstream_identifier)
+        brn = ""
+        trn = ""
         if rep_json and not patch:
             return rep_json["uuid"]
-        
+        elif rep_json:
+            brn = rep_json["biosample_replicate_number"]
+            trn = rep_json["technical_replicate_number"]
+        else:
+           # Then there isn't a replicate yet for this library, and maybe not even the biosample.
+            if not biosample.upstream_identifier in exp_reps_instance.rep_hash:
+                brn = exp_reps_instance.suggest_brn()
+                trn = 1
+            else:
+                brn = exp_reps_instance.rep_hash[biosample.upstream_identifier]
+                trn = exp_reps_instance.suggest_trn(biosample.upstream_identifier)
+         
         if dcc_exp["assay_term_name"] == "ChIP-seq":
             # Only add antibody if not replicate on control experiment 
             if not dcc_exp["target"]["uuid"] == "89839f28-ad35-4bb4-a214-ee65d0a97d8d": # Control-human target
@@ -1105,12 +1118,6 @@ class Submit():
         #payload["aliases"] = 
         # Set biological_replicate_number and technical_replicate_number. For ssATAC-seq experiments,
         # these two attributes don't really make sense, but they are required to submit, so ...
-
-        if not biosample.upstream_identifier in exp_reps_instance.rep_hash:
-            brn = exp_reps_instance.suggest_brn()
-            trn = 1
-        else:
-            brn, trn = exp_reps_instance.suggest_brn_trn(biosample.upstream_identifier)
             
         payload["biological_replicate_number"] = brn
         payload["technical_replicate_number"] = trn
