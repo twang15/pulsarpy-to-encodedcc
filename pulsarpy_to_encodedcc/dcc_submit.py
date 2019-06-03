@@ -1228,7 +1228,7 @@ class Submit():
                 raise Exception("Can't set paired_with for SequencingResult {} since R1 doesn't have an upstream set.".format(sres.id))
             payload["paired_with"] = sres.read1_upstream_identifier
         if not file_uri:
-            raise NoFastqFile("SequencingResult '{}' for R{read_num} does not have a FASTQ file path set.".format(pulsar_sres_id, read_num))
+            raise NoFastqFile("SequencingResult '{}' for R{} does not have a FASTQ file path set.".format(pulsar_sres_id, read_num))
         elif not upstream_id and patch:
             raise Exception("Can't PATCH file object on the Portal when the SequencingResult {} for read {} doesn't have an upstream ID set.".format(pulsar_sres_id, read_num))
 
