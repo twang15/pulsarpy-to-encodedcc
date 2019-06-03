@@ -925,6 +925,10 @@ class Submit():
        
         payload["caption"] = caption
 
+        submitter_comment = ip.submitter_comments
+        if submitter_comment:
+            payload["submitter_comment"] = submitter_comment
+
         # Submit payload
         if patch:  
             upstream_id = self.patch(payload, gl.upstream_identifier)
