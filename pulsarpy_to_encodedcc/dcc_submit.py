@@ -1116,7 +1116,7 @@ class Submit():
         if rep_json and not patch:
             return rep_json["uuid"]
         elif rep_json:
-            brn = rep_json["biosample_replicate_number"]
+            brn = rep_json["biological_replicate_number"]
             trn = rep_json["technical_replicate_number"]
         else:
            # Then there isn't a replicate yet for this library, and maybe not even the biosample.
@@ -1139,7 +1139,7 @@ class Submit():
         payload["technical_replicate_number"] = trn
         # Submit payload
         if patch:  
-            upstream_id = self.patch(payload, rep_json.upstream_identifier)
+            upstream_id = self.patch(payload, rep_json["uuid"])
         else:
             # POST to ENCODE Portal. Don't use post() method defined here that is a wrapper over 
             # `encode_utils.connection.Connection.post`, since the wrapper only works if the record we
