@@ -454,14 +454,20 @@ class Submit():
                 self.post_library_through_fastq(pulsar_biosample_id=b, dcc_exp_id=ctl_exp_accession, patch=patch)
         return ctl_exp_accession
 
-    def post_bulk_atacseq_exp(self, rec_id, patch=False):
+    def post_bulk_atacseq_exp(self, rec_id, patch=False, patch_all=False):
         """
         Args:
             rec_id: `int`. ID of an AtacSeq experiment record in Pulsar. Should be a bulk and not
                 a single-cell experiment. 
+            patch: `bool`. True means to patch the DCC experiment record.
+            patch_all: `bool`. True means to patch not just the experiment record, but its sub-entities
+                also, i.e. biosamples, libraries, replicates, ... Setting this to True automatically
+                sets `patch` to True as well.
 
         Returns:
         """
+        if patch_all:
+            patch = True
         pulsar_exp = models.Atacseq(rec_id)
         pulsar_exp_upstream = pulsar_exp.upstream_identifier
         payload = {}
@@ -472,9 +478,9 @@ class Submit():
         # submit experiment
         if patch:
             dcc_exp_accession = self.patch(payload=payload, upstream_id=pulsar_exp_upstream)
-        else:
+        if patch_all or not patch:
             dcc_exp_accession = self.post(payload=payload, dcc_profile="experiment", pulsar_model=models.Atacseq, pulsar_rec_id=rec_id)
-            self.post_experimental_reps(rec_id=rec_id, experiment_type="atac-seq")
+            self.post_experimental_reps(rec_id=rec_id, experiment_type="atac-seq", patch=patch)
 
         return dcc_exp_accession
 
@@ -558,7 +564,7 @@ class Submit():
         # Then the Paired-input, which is unique to this experiment. 
         self.post_chipseq_ctl_exp(rec_id=rec_id, paired_input=True)
 
-    def post_experimental_reps(self, rec_id, experiment_type):
+    def post_experimental_reps(self, rec_id, experiment_type, patch=False):
         """
         POSTS the experimental replicates of a ChipseqExperiment or bulk Atacseq experiment object.
 
@@ -574,7 +580,7 @@ class Submit():
             raise Exception("Unknown experiment type '{}' passed to experiment_type parameter.".format(experiment_type))
         rep_ids = pulsar_exp.replicate_ids
         for i in rep_ids:
-            self.post_library_through_fastq(pulsar_library_id=i, dcc_exp_id=pulsar_exp.upstream_identifier)
+            self.post_library_through_fastq(pulsar_library_id=i, dcc_exp_id=pulsar_exp.upstream_identifier, patch=patch
 
     def get_exp_core_payload_props(self, pulsar_exp_rec, assay_term_name):
         """
