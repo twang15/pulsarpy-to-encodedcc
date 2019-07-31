@@ -356,7 +356,10 @@ def donor(rec_id):
     if GENDER_PROP in rec:
         payload["gender"] = rec[GENDER_PROP]
     payload[UPSTREAM_PROP] = accession
-    payload["name"] = euu.strip_alias_prefix(aliases[0])
+    try:
+        payload["name"] = euu.strip_alias_prefix(aliases[0])
+    except IndexError:
+        payload["name"] = rec_id
     return models.Donor.post(payload)
 
 def treatment(rec_id, patch=False):
