@@ -580,7 +580,7 @@ class Submit():
             raise Exception("Unknown experiment type '{}' passed to experiment_type parameter.".format(experiment_type))
         rep_ids = pulsar_exp.replicate_ids
         for i in rep_ids:
-            self.post_library_through_fastq(pulsar_library_id=i, dcc_exp_id=pulsar_exp.upstream_identifier, patch=patch
+            self.post_library_through_fastq(pulsar_library_id=i, dcc_exp_id=pulsar_exp.upstream_identifier, patch=patch)
 
     def get_exp_core_payload_props(self, pulsar_exp_rec, assay_term_name):
         """
