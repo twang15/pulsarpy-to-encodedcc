@@ -580,7 +580,7 @@ class Submit():
             raise Exception("Unknown experiment type '{}' passed to experiment_type parameter.".format(experiment_type))
         rep_ids = pulsar_exp.replicate_ids
         for i in rep_ids:
-            self.post_library_through_fastq(pulsar_library_id=i, dcc_exp_id=pulsar_exp.upstream_identifier, patch=patch
+            self.post_library_through_fastq(pulsar_library_id=i, dcc_exp_id=pulsar_exp.upstream_identifier, patch=patch)
 
     def get_exp_core_payload_props(self, pulsar_exp_rec, assay_term_name):
         """
@@ -1116,7 +1116,7 @@ class Submit():
         if rep_json and not patch:
             return rep_json["uuid"]
         elif rep_json:
-            brn = rep_json["biosample_replicate_number"]
+            brn = rep_json["biological_replicate_number"]
             trn = rep_json["technical_replicate_number"]
         else:
            # Then there isn't a replicate yet for this library, and maybe not even the biosample.
@@ -1139,7 +1139,7 @@ class Submit():
         payload["technical_replicate_number"] = trn
         # Submit payload
         if patch:  
-            upstream_id = self.patch(payload, rep_json.upstream_identifier)
+            upstream_id = self.patch(payload, rep_json["uuid"])
         else:
             # POST to ENCODE Portal. Don't use post() method defined here that is a wrapper over 
             # `encode_utils.connection.Connection.post`, since the wrapper only works if the record we
