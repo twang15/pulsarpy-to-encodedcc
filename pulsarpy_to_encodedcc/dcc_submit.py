@@ -109,6 +109,9 @@ class NoFastqFile(Exception):
 
 
 class Submit():
+    """
+    Contains methods for submitting various types of objects in Pulsar to the ENCODE Portal. 
+    """
 
     def __init__(self, dcc_mode=None, extend_arrays=True):
         if not dcc_mode:
