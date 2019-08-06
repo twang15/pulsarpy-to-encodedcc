@@ -1,4 +1,5 @@
 encode-utils
+dxpy3
 pulsarpy
 inflection
 sphinx-argparse
