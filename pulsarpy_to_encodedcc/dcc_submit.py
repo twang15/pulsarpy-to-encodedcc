@@ -318,7 +318,7 @@ class Submit():
         # POST file records for all sequencing results for the Library
         sres_ids = pulsar_library.sequencing_result_ids
         if not sres_ids:
-            msg = "No SequencingResult for Library {} of Biosample {}, exiting.".format(pulsar_biosample_id, pulsar_library.id)
+            msg = "No SequencingResult for Library {} of Biosample {}, exiting.".format(pulsar_library.id, pulsar_biosample_id)
             error_logger.error(msg)
             raise MissingSequencingResult(msg)
         
@@ -411,7 +411,10 @@ class Submit():
             # Normally there will only be one paired_input control Biosample, but there could at times
             # be another. That happens when one of the reps fail, and another rep has to be made from a
             # different cell batch than the sibling rep on the experiment.
-            input_ids.extend(pulsar_exp.control_replicate_ids) # Biosample records.
+            input_ids.extend(
+                models.Library(lib_id).biosample_id
+                for lib_id in pulsar_exp.control_replicate_ids
+            ) # Biosample records.
         if not input_ids:
             msg = "Can't submit {} control exp. for {}: no replicates.".format(experiment_type, pulsar_exp.abbrev_id())
             log_error(msg)
@@ -434,8 +437,8 @@ class Submit():
         alias = alias_prefix + alias 
         payload["aliases"] = [alias]
         payload.update(self.get_exp_core_payload_props(pulsar_exp_rec=pulsar_exp, assay_term_name="ChIP-seq"))
-        payload["description"] = "ChIP-seq on human " + payload["biosample_term_name"]
-        payload["target"] = "Control-human"
+        payload["description"] = "ChIP-seq on human " + self.ENC_CONN.get(payload["biosample_ontology"])["term_name"]
+        payload["control_type"] = "input library"
   
         # Before POSTING experiment, check if it already exists on the Portal.
         # POST experiment. Don't use self.post() since there isn't a Pulsar model for a control experiment.
@@ -453,8 +456,9 @@ class Submit():
             ctl_exp_accession = dcc_exp["accession"]
 
         if (patch and not exp_only) or not patch:
-            for b in input_ids:
-                self.post_library_through_fastq(pulsar_biosample_id=b, dcc_exp_id=ctl_exp_accession, patch=patch)
+            for b in inputs:
+                for lib_id in b.library_ids:
+                    self.post_library_through_fastq(pulsar_library_id=lib_id, dcc_exp_id=ctl_exp_accession, patch=patch)
         return ctl_exp_accession
 
     def post_bulk_atacseq_exp(self, rec_id, patch=False, patch_all=False):
@@ -509,9 +513,9 @@ class Submit():
             msg = "Target {} missing upstream identifier.".format(target.abbrev_id())
             log_error(msg)
             raise MissingTargetUpstream(msg)
-        payload["target"] = target.upstream_identifier
+        payload["target"] = target.upstream_identifier.replace('eGFP-', '').replace('3xFLAG-', '')
         #payload["description"] = pulsar_exp.description.strip()
-        payload["description"] = target.upstream_identifier.rstrip('-human') + ' ChIP-seq on human ' + payload["biosample_term_name"]
+        payload["description"] = target.upstream_identifier.rstrip('-human') + ' ChIP-seq on human ' + self.ENC_CONN.get(payload["biosample_ontology"])["term_name"]
         # submit experiment
         if patch:
             dcc_exp_accession = self.patch(payload=payload, upstream_id=pulsar_exp_upstream)
@@ -544,7 +548,10 @@ class Submit():
         if not wt_ctl_exp:
             raise Exception("WT input {} on ChipseqExperiment {} doesn't have an upstream control experiment record.".format(wt.abbrev_id(), exp.abbrev_id()))
         possible_controls.append(wt_ctl_exp["accession"])
-        pis = [models.Biosample(x) for x in exp.control_replicate_ids]
+        pis = [
+            models.Biosample(models.Library(lib_id).biosample_id)
+            for lib_id in exp.control_replicate_ids
+        ]
         for i in pis:
             upstream = i.upstream_identifier
             pi_ctl_exp = self.check_if_biosample_has_exp_on_portal(upstream)
@@ -600,7 +607,6 @@ class Submit():
         payload["biosample_ontology"] = self.ENC_CONN.get_biosample_type(classification=bty.name, term_id=btn.accession)["@id"]
         payload["assay_term_name"] = assay_term_name
         payload["documents"] = self.post_documents(pulsar_exp_rec.document_ids)
-        payload["experiment_classification"] = ["functional genomics assay"]
         submitter_comment = pulsar_exp_rec.submitter_comments.strip()
         if submitter_comment:
             payload["submitter_comment"] = submitter_comment
@@ -635,7 +641,7 @@ class Submit():
             #payload["introduced_sequence"] = dc.insert_sequence.upper()
 
         payload["method"] = "CRISPR"       # Required
-        payload["modified_site_by_target_id"] = dc_target.upstream_identifier
+        payload["modified_site_by_target_id"] = dc_target.upstream_identifier.replace('eGFP-', '').replace('3xFLAG-', '')
         payload["purpose"] = rec.purpose   # Required
 
         # Note that CrisprConstruct can also has_many construct_tags. Those are not part of the donor
@@ -1132,7 +1138,7 @@ class Submit():
          
         if dcc_exp["assay_term_name"] == "ChIP-seq":
             # Only add antibody if not replicate on control experiment 
-            if not dcc_exp["target"]["uuid"] == "89839f28-ad35-4bb4-a214-ee65d0a97d8d": # Control-human target
+            if not dcc_exp.get("control_type"):
                 payload["antibody"] = "ENCAB728YTO" #AB-9 in Pulsar
         #payload["aliases"] = 
         # Set biological_replicate_number and technical_replicate_number. For ssATAC-seq experiments,
