@@ -52,7 +52,10 @@ class ValidateChipseqExperiments():
                 msg = "ChipseqExperiment missing WT control."
                 self.fout.write(str_exp_id + "\t" + msg + "\n")
             # Check Paired input present and has GM
-            pi_ids = exp.control_replicate_ids
+            pi_ids = [
+                models.Library(lib_id).biosample_id
+                for lib_id in exp.control_replicate_ids
+            ]
             if not pi_ids:
                 msg = "ChipseqExperiment missing paired input."
                 self.fout.write(str_exp_id + "\t" + msg + "\n")
