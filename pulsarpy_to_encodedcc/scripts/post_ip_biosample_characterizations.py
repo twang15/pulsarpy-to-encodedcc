@@ -16,7 +16,8 @@ import argparse
 
 import pulsarpy_to_encodedcc.dcc_submit as d  
 
-S = d.Submit("prod")
+#S = d.Submit("prod")
+S = d.Submit("dev")
 
 def get_parser():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -28,6 +29,11 @@ def get_parser():
     return parser
 
 def main():
+#    b_id = '11168'
+#    ip_id = '162'
+#    S.post_ip_biosample_characterization(biosample_id=b_id, immunoblot_id=ip_id, patch=False)
+#    return
+    
     parser = get_parser()
     args = parser.parse_args()
     infile = args.infile
