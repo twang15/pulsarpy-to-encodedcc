@@ -188,6 +188,7 @@ class Submit():
                 exist on the Portal.  See ``encode_utils.connection.Connection.patch()`` for more details.
         """
         payload[self.ENC_CONN.ENCID_KEY] = upstream_id
+        dont_extend_arrays = True
         if dont_extend_arrays:
             extend = False
         else:
@@ -197,7 +198,7 @@ class Submit():
             raise Exception("Couldn't PATCH record on the Portal since it doesn't exist.")
         return upstream_id
 
-    def post(self, payload, dcc_profile, pulsar_model, pulsar_rec_id):
+    def post(self, payload, dcc_profile, pulsar_model, pulsar_rec_id, repost=False):
         """
         A wrapper over `encode_utils.connection.Connection.post()`. 
 
@@ -228,15 +229,31 @@ class Submit():
         pulsar_rec = pulsar_model(pulsar_rec_id)
         upstream = pulsar_rec.upstream_identifier
         if upstream:
+          # for other dcc_profile than biosample immunoblot (IP, "biosample_characterization"),
+          # repost shall be False to aviod repost a record which already exists on ENCODE Portal.
+          if not repost:
             # May sure that upstream exists. Could be that the upstream identifier belongs to a different
             # server, i.e. test or a demo, than the one we are currently connected to. 
-            # No need to POST. 
+            # No need to POST.
             if upstream.startswith("ENC"):
-                # For sure this is a production accession and we should leave it alone.
+              # For sure this is a production accession and we should leave it alone.
                 return upstream
+
+            # Tao: not all upstream ids start with "ENC", e.g., Gel lanes has upstream ids
+            #      like michael-snyder:pGL-156 (https://pulsar-encode.herokuapp.com/gels/38)
+            # If it exists on ENCODE Portal, and we do not want to repost (because it is not
+            # an IP), we return its upstream id immediately.
             exists_on_server = self.ENC_CONN.get(rec_ids=upstream)
             if exists_on_server:
-                return upstream
+              return upstream
+
+          # Tao: if upstream id does not exist in pulsar or ENCODE Portal, 
+          # or even if the upstream Id exists but we need a post for an
+          # IP because child biosamples do not have their own IPs but share the same IP of their parent's,
+          # we need a repost.
+          else:
+            assert(dcc_profile == "biosample_characterization"), "A repost only happens for biosample characterization (IP)"
+
         aliases = payload.get("aliases", [])
         abbrev_alias = pulsar_rec.abbrev_id()
         if abbrev_alias not in aliases:
@@ -254,6 +271,31 @@ class Submit():
         except KeyError:
             pass
         payload["aliases"] = aliases
+
+        # make aliases unique since it is the key for ENCODE Portal to detect whether it is a duplicate.
+        # Option 1: Myers approach, only submit one IP for both biosample
+        #   chip-seq: https://www.encodeproject.org/experiments/ENCSR635VTR/
+        #   biosample 1: ENCBS187ICM
+        #   biosample 2: ENCBS739WGO
+        # Option 2: Tao's approach, submit one IP for each biosample 
+        #   chip-seq: https://www.encodeproject.org/experiments/ENCSR602QEJ/
+        #   biosample 1: https://www.encodeproject.org/biosamples/ENCBS055BET/
+        #   biosample 2: https://www.encodeproject.org/biosamples/ENCBS062KGP/
+        # With the following discussion, we decided to take Option 1, by commenting out the following
+        # two lines:
+        #if repost:
+        #  payload['aliases'] = [payload['aliases'][0] + "-" + payload['characterizes']]
+        # Discussion:
+        # Annika: We need to confirm one thing with you for IP submission. In case the IP is done on the 
+        # parent, we submit it twice (one for each child), which is what we discussed before. 
+        # However, the same IP shows up twice on the experiment then which is a little weird. 
+        # Biosample 1: https://www.encodeproject.org/biosamples/ENCBS062KGP/ Biosample 
+        # 2: https://www.encodeproject.org/biosamples/ENCBS055BET/ and corresponding 
+        # experiment: https://www.encodeproject.org/experiments/ENCSR602QEJ/
+        # Myers Mendehall does it differently: they also have the IP on the parent and 
+        # submit it once for only one of the biosamples and the other one doesn't have an IP attached.
+        #if repost:
+        #  payload['aliases'] = [payload['aliases'][0] + "-" + payload['characterizes']]
     
         # `dict`. The POST response if the record didn't yet exist on the ENCODE Portal, or the
         # record JSON itself if it does already exist. Note that the dict. will be empty if the connection
@@ -406,6 +448,8 @@ class Submit():
             # Only 1 Wild Type input per experiment.
             if pulsar_exp.wild_type_control_id:
                 input_ids.append(pulsar_exp.wild_type_control_id)
+            else:
+                raise ExpMissingReplicates("Chip-seq does not have wild-type control.")
         else:
             experiment_type = "paired-input"
             # Normally there will only be one paired_input control Biosample, but there could at times
@@ -534,6 +578,9 @@ class Submit():
 
     def patch_chipseq_possible_controls(self, pulsar_exp_id):
         possible_controls = self.get_chipseq_possible_controls(pulsar_exp_id)
+        if not possible_controls:
+            raise Exception("Either WT contorl or input library control or both should exist.")
+
         payload = {}
         payload["possible_controls"] = possible_controls
         exp = models.ChipseqExperiment(pulsar_exp_id)
@@ -542,12 +589,17 @@ class Submit():
     def get_chipseq_possible_controls(self, pulsar_exp_id):
         possible_controls = []
         exp = models.ChipseqExperiment(pulsar_exp_id)
-        wt = models.Biosample(exp.wild_type_control_id)
-        wt_upstream = wt.upstream_identifier
-        wt_ctl_exp = self.check_if_biosample_has_exp_on_portal(wt_upstream)
-        if not wt_ctl_exp:
-            raise Exception("WT input {} on ChipseqExperiment {} doesn't have an upstream control experiment record.".format(wt.abbrev_id(), exp.abbrev_id()))
-        possible_controls.append(wt_ctl_exp["accession"])
+        # Tao Wang: there may be not wild-type control
+        if exp.wild_type_control_id:
+            wt = models.Biosample(exp.wild_type_control_id)
+            wt_upstream = wt.upstream_identifier
+            wt_ctl_exp = self.check_if_biosample_has_exp_on_portal(wt_upstream)
+            if not wt_ctl_exp:
+                raise Exception("WT input {} on ChipseqExperiment {} doesn't have an upstream control experiment record.".format(wt.abbrev_id(), exp.abbrev_id()))
+            possible_controls.append(wt_ctl_exp["accession"])
+        
+        # input library control may also missing. 
+        # But either wild-type control or input library control should exist.
         pis = [
             models.Biosample(models.Library(lib_id).biosample_id)
             for lib_id in exp.control_replicate_ids
@@ -555,13 +607,18 @@ class Submit():
         for i in pis:
             upstream = i.upstream_identifier
             pi_ctl_exp = self.check_if_biosample_has_exp_on_portal(upstream)
-            if not pi_ctl_exp:
+            if not i and not pi_ctl_exp:
                 raise Exception("Paired input {} on ChipseqExperiment {} doesn't have an upstream control experiment record.".format(i.abbrev_id(), exp.abbrev_id()))
             possible_controls.append(pi_ctl_exp["accession"])
+
         return list(set(possible_controls))
         
     def post_chipseq_control_experiments(self, rec_id):
         """
+        Tao's note: following discussions w/ Annika, we accept one of them
+        {WT-input, Paired-input, both}, while the previous restriction only
+        accept 'both'.
+
         POSTS the WT input and the paired input controls that are associated to the indicated 
         ChipseqExperiment in Pulsar, turning each into an experiment record on the Portal.
 
@@ -569,10 +626,30 @@ class Submit():
             rec_id: `int`. ID of a ChipseqExperiment record in Pulsar.
         """
         print(">>> IN post_chipseq_control_experiments()")
+        controls = 0
+
         # First the WT-input:
-        self.post_chipseq_ctl_exp(rec_id=rec_id, wt_input=True)
-        # Then the Paired-input, which is unique to this experiment. 
-        self.post_chipseq_ctl_exp(rec_id=rec_id, paired_input=True)
+        try:
+            self.post_chipseq_ctl_exp(rec_id=rec_id, wt_input=True)
+        except Exception as ex:
+            print(ex)
+            print("Wild-type control experiment is unavailable")
+        else:
+            controls += 1
+            print("Wild-type control experiment is done")
+
+        # Then the Paired-input, which is unique to this experiment.
+        try:
+            self.post_chipseq_ctl_exp(rec_id=rec_id, paired_input=True)
+        except Exception as ex:
+            print(ex)
+            print("Input-library control experiment is unavailable.")
+        else:
+            print("Input-library control experiment is available.")
+            controls += 1
+
+        assert(controls >= 1), "Either Wild-type control or input-library control or both should be available"
+
 
     def post_experimental_reps(self, rec_id, experiment_type, patch=False):
         """
@@ -673,7 +750,7 @@ class Submit():
                 r = {}
                 r["source"] = "addgene"
                 r["url"] = "http://www.addgene.org/" + addgene_id
-                r["identifier"] = addgene_id
+                r["identifier"] = "addgene:" + addgene_id
                 reagents.append(r)
         if reagents:
             payload["reagents"] = reagents
@@ -757,7 +834,7 @@ class Submit():
         """
         raise Exception("Vendors must be registered directly by the DCC personel.")
 
-    def get_gel_lane_with_biosample(self, immunoblot_id, biosample_id):
+    def get_gel_lane_with_biosample(self, immunoblot_id, biosample_id, parent_biosample_id):
         """
         Given an Immunoblot record ID, and a Biosample record ID, returns the GelLane object with the 
         given Biosample. This method assumes that a Gel won't have more than one GelLane with the same
@@ -787,14 +864,55 @@ class Submit():
         gl = "" # GelLane
         for gel_lane_id in gel.gel_lane_ids:
             gel_lane = models.GelLane(gel_lane_id)
-            if biosample_id == gel_lane.biosample_id:
+            if biosample_id == gel_lane.biosample_id or parent_biosample_id == gel_lane.biosample_id:
                 gl = gel_lane
         if not gl:
             raise IpLaneException("Could't find a GelLane that has Biosample {} on Immunoblot {}.".format(biosample_id, immunoblot_id))
         if not gl.attrs["pass"]:
             print("GelLane didn't pass for Biosample {}.".format(biosample_id))
-            return None
+            raise ValueError("GelLane didn't pass")
+            #return None
         return gl
+
+    def get_root_biosample_id(self, child_biosample_id):
+      """
+      To submit IP for a biosample, submission of its root ancester biosample's IP has to be done first.
+      The root ancester is ALWAYS wild-type biosample and ALWAYS has its own IP to show background
+      noise within itself. The root ancester is usually a biosample batch of a certain cell line.
+      For example, cell line SK-N-SH (represented by SK-N-SH master B-2507) has several biosample 
+      batches, such as SK-N-SH batch 0 B-2527, SK-N-SH batch 1 B-2531 and SK-N-SH batch 2 B-2535 among
+      many other batches. Each of these batches is a unique root ancester for many child biosamples.
+      The family tree looks like:
+      
+                             SK-N-SH master B-2507
+                              /         |          \
+                            /           |           \__________________\
+                          /             |                               \
+      SK-N-SH batch 1 B-2531 (root)   SK-N-SH batch 2 B-2535 (root)   SK-N-SH batch 0 B-2527 (root) ....
+                /   |   \              /   |   \                          /  |  \
+              /     |    \           /     |    \                        /   |   \
+          B-2532  B-2533  ...
+            / \
+          /    \
+       B-2534  ...
+
+       So, all direct descedents of master B-2507 are biosample batches which are the root biosample for their
+       respective biosample family tree.
+      """
+      root_biosample_id = None
+      if not child_biosample_id:
+        return root_biosample_id
+      child_biosample = models.Biosample(child_biosample_id)
+      parent_biosample_id = child_biosample.part_of_id
+      
+      while parent_biosample_id:
+        root_biosample_id = child_biosample_id
+        child_biosample_id = parent_biosample_id
+        child_biosample = models.Biosample(child_biosample_id)
+        parent_biosample_id = child_biosample.part_of_id
+
+      return root_biosample_id
+
 
     def post_ip_biosample_characterization(self, immunoblot_id, biosample_id, patch=False):
         """
@@ -825,45 +943,69 @@ class Submit():
             # For now, don't sumbit until jadrian says otherwise. 
             print("Biosample missing upstream - skipping.")
             return None
-            
+
+        # At the early stage of ENCODE4, only parent biosamples gets biosample
+        # characterization (IP), all its child biosamples do not have one as their
+        # own but share their parent's IP.
+        parent_biosample_id = None
+        if not immunoblot_id:    
+          parent_biosample_id = biosample.part_of_id
+          parent_biosample = models.Biosample(parent_biosample_id)
+          if parent_biosample['immunoblot_ids']:
+            immunoblot_id = parent_biosample['immunoblot_ids'][0]
+          else:
+            print("Biosample and its parent do not have immunoblot - skipping")
+            raise ValueError("IP does not exist on either parent or child biosample.")
+            #return None
+
         ip = models.Immunoblot(immunoblot_id)
-        gl = self.get_gel_lane_with_biosample(immunoblot_id=immunoblot_id, biosample_id=biosample_id)
+        gl = self.get_gel_lane_with_biosample(immunoblot_id=immunoblot_id, biosample_id=biosample_id, parent_biosample_id=parent_biosample_id)
         if not gl:
             return None
 
         payload = {}
-        if not biosample.wild_type:
-            # Find WT parent that has an associated Immunoblot to use as control
-            # and set that Biosample's upstream_identifier as the value of the ENCODE property 
-            # biosample_characterization.wildtype_biosample. Currently, the WT biosample is determined
-            # soley by biosample_term_name. 
-            biosample_term_name = models.BiosampleTermName(biosample.biosample_term_name_id).name
-            if biosample_term_name == "A549":
-                wt_biosample_id = 2551
-            elif biosample_term_name == "GM23338":
-                wt_biosample_id = 2559
-            elif biosample_term_name == "HepG2":
-                wt_biosample_id = 2510
-            elif biosample_term_name == "MCF-7":
-                wt_biosample_id = 2515
-            elif biosample_term_name == "SK-N-SH":
-                wt_biosample_id = 11200
-            else:
-                msg = "Can't submit IP biosample_characterization for Biosample {} IP {} since the wild type biosample with its own Immunoblot can't be determined for biosample term name {}.".format(biosample.id, immunoblot_id, biosample_term_name)
-                error_logger.error(msg)
-                return None
-            wt_biosample = models.Biosample(wt_biosample_id)
-            wt_biosample_upstream = wt_biosample.upstream_identifier
-            if not wt_biosample_upstream:
-                print("POSTING WT parent Biosample.")
-                wt_biosample_upstream = self.post_biosample(wt_biosample_id)
-            # Then POST the Immunoblot linked to the WT Parent Biosample. Note that it's possible
-            # but unlikely for a Biosample to be linked to multiple Immunoblots. In that case, the
-            # first one will be submitted. 
-            wt_ip_id = wt_biosample.immunoblot_ids[0]
-            print("POSTING WT parent Biosample's Immunoblot.")            
-            self.post_ip_biosample_characterization(immunoblot_id=wt_ip_id, biosample_id=wt_biosample_id, patch=False)
-            payload["wildtype_biosample"] = wt_biosample_upstream
+        #if not biosample.wild_type:
+        #    wt_biosample_id = self.get_root_biosample_id(biosample_id)
+        #    assert(wt_biosample_id), "Each biosample must have a wild-type root biosample."
+        #    ## Find WT parent that has an associated Immunoblot to use as control
+        #    ## and set that Biosample's upstream_identifier as the value of the ENCODE property 
+        #    ## biosample_characterization.wildtype_biosample. Currently, the WT biosample is determined
+        #    ## soley by biosample_term_name.
+        #    wt_biosample = models.Biosample(wt_biosample_id)
+        #    wt_biosample_upstream = wt_biosample.upstream_identifier
+        #    if not wt_biosample_upstream:
+        #        print("POSTING WT parent Biosample.")
+        #        wt_biosample_upstream = self.post_biosample(wt_biosample_id)
+        #    # Then POST the Immunoblot linked to the WT Parent Biosample. Note that it's possible
+        #    # but unlikely for a Biosample to be linked to multiple Immunoblots. In that case, the
+        #    # first one will be submitted.
+        #    if wt_biosample.immunoblot_ids:
+        #      wt_ip_id = wt_biosample.immunoblot_ids[0]
+        #    else:
+        #      biosample_term_name = models.BiosampleTermName(biosample.biosample_term_name_id).name
+        #      if biosample_term_name == "A549":
+        #        wt_biosample_id = 2551
+        #      elif biosample_term_name == "GM23338":
+        #        wt_biosample_id = 2559
+        #      elif biosample_term_name == "HepG2":
+        #        wt_biosample_id = 2510
+        #      elif biosample_term_name == "MCF-7":
+        #        wt_biosample_id = 2515
+        #      elif biosample_term_name == "SK-N-SH":
+        #        wt_biosample_id = 11200
+        #      else:
+        #        msg = "Can't submit IP biosample_characterization for Biosample {} IP {} since the wild type biosample with its own Immunoblot can't be determined for biosample term name {}.".format(biosample.id, immunoblot_id, biosample_term_name)
+        #        error_logger.error(msg)
+        #        return None
+        #      wt_biosample = models.Biosample(wt_biosample_id)
+        #      wt_biosample_upstream = wt_biosample.upstream_identifier
+        #      if not wt_biosample_upstream:
+        #          print("POSTING WT parent Biosample.")
+        #          wt_biosample_upstream = self.post_biosample(wt_biosample_id)
+        #      wt_ip_id = wt_biosample.immunoblot_ids[0]
+        #    print("POSTING WT parent Biosample's Immunoblot.")            
+        #    self.post_ip_biosample_characterization(immunoblot_id=wt_ip_id, biosample_id=wt_biosample_id, patch=False)
+        #    payload["wildtype_biosample"] = wt_biosample_upstream
         
         payload["characterization_method"] = "immunoblot"
         payload["characterizes"] = biosample.upstream_identifier
@@ -903,7 +1045,8 @@ class Submit():
             if not biosample.chipseq_experiment_ids:
                 msg = "Biosample {} is not linked to any ChipSeq experiments.".format(biosample_id)
                 error_logger.error(msg)
-                return None
+                raise ValueError("Replicate not used in Chip experiment.")
+                #return None
                 #raise IpLaneException(msg)
             elif len(biosample.chipseq_experiment_ids) > 1:
                 msg = "Biosample {} is linked to more than 1 ChipSeq experiment. It is not known as to which one this IP relates.".format(biosample_id)
@@ -914,7 +1057,11 @@ class Submit():
                 msg = "ChipSeq experiment {} for Biosample {} needs to be submitted prior to submitting the IP biosample_characterization.".format(chipseq_exp.id, biosample_id)
                 error_logger.error(msg)
                 raise IpLaneException(msg)
-            crispr_modification = models.CrisprModification(biosample.crispr_modification_id)
+            try:
+              crispr_modification = models.CrisprModification(biosample.crispr_modification_id)
+            except ValueError as ve:
+              print("Cannot submit IP for Biosample {} without genetic modification in pulsar.".format(biosample_id))
+              raise ValueError("Crispr genetic modification does not exist")
             if not crispr_modification.upstream_identifier:
                 msg = "Biosample {} has a CrisprModification, but it isn't yet registered on the Portal.".format(biosample_id)
                 error_logger.error(msg)
@@ -923,20 +1070,36 @@ class Submit():
             target = models.Target(crispr_construct.target_id)
             # Get biosample_replicate_number on experiment in Portal
             rep_hash = encode_utils.replicate.ExpReplicates(self.ENC_CONN, chipseq_exp.upstream_identifier).rep_hash
-            brn = rep_hash[biosample.upstream_identifier]["brn"]
+            try:
+              brn = rep_hash[biosample.upstream_identifier]["brn"]
+            except KeyError as ke:
+              raise ValueError("Replicate not used in Chip experiment.")
             caption += " ({} eGFP-{} replicate {})".format(btn, target.name, brn)
-        caption += " cells using anti-eGFP antibody. The image shows western blot analysis of input"
-        caption += " (lane 1),"
-        if not biosample.wild_type:
-            caption += " immunoprecipitate (lane 2), and mock immunoprecipitate using IgG (lane 3)."
+        caption += " cells using anti-eGFP antibody."
+        if btn in ['K562', 'GM12878', 'MCF-7']:
+          caption += "The image shows western blot analysis of immunoprecipitation."
+        elif btn in ['SK-N-SH', 'A549', 'HEPG2', 'WTC-11']:
+          caption += "The image shows western blot analysis of input"
+          caption += " (lane 1),"
+          if not biosample.wild_type:
+              caption += " immunoprecipitate (lane 2), and mock immunoprecipitate using IgG (lane 3)."
+          else:
+              caption += " and immunoprecipitate (lane 2)."
         else:
-            caption += " and immunoprecipitate (lane 2)."
+            assert(False), "New biosample cell line name. Need to be in one of the above two btn list!"
+
         caption += " Molecular weight standard (Bio-Rad, cat. # 161-0374) contains 10"
         caption += " pre-stained recombinant proteins (250, 150, 100, 75, 50, 37, 25, 20, 15, and 10 kD)."
-        if not biosample.wild_type:
-            caption += " The target molecular weight is {} kD as indicated with an arrow.".format(gl.expected_product_size)
-        if gl.low_target_band_intensity:
-             caption += " Lower size bands which may be due to potential degradation products are marked with asterisks."
+        
+        if btn in ['K562', 'GM12878', 'MCF-7']:
+          caption += "The target molecular weight is indicated."
+        elif btn in ['SK-N-SH', 'A549', 'HEPG2', 'WTC-11']:
+          if not biosample.wild_type:
+              caption += " The target molecular weight is {} kD as indicated with an arrow.".format(gl.expected_product_size)
+          if gl.low_target_band_intensity:
+              caption += " Lower size bands which may be due to potential degradation products are marked with asterisks."
+        else:
+          assert(False), "New biosample cell line name. Need to be in one of the above two btn list!"
        
         payload["caption"] = caption
 
@@ -946,9 +1109,9 @@ class Submit():
 
         # Submit payload
         if patch:  
-            upstream_id = self.patch(payload, gl.upstream_identifier)
+          upstream_id = self.patch(payload, gl.upstream_identifier)
         else:
-            upstream_id = self.post(payload=payload, dcc_profile="biosample_characterization", pulsar_model=models.GelLane, pulsar_rec_id=gl.id)
+          upstream_id = self.post(payload=payload, dcc_profile="biosample_characterization", pulsar_model=models.GelLane, pulsar_rec_id=gl.id, repost=False)
         return upstream_id
 
     def post_biosample(self, rec_id, patch=False):
@@ -1302,6 +1465,7 @@ class Submit():
         # corresponding file model, we can't use the wrapper method. So we'll have to manually 
         # set the upstream identifier in the attribute `SequencingResult.read1_upstream_identifier`
         # or `SequencingResult.read2_upstream_identifier`.
+        #patch = True
         if patch:
             upstream_id = self.patch(payload=payload, upstream_id=upstream_id)
         else:
