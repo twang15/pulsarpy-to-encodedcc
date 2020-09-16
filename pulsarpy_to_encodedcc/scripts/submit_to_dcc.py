@@ -21,6 +21,7 @@ from pulsarpy import models
 MODEL_PROFILE = {}
 MODEL_PROFILE["biosample"] = "Biosample"
 MODEL_PROFILE["library"] = "Library"
+MODEL_PROFILE["experiment"] = "chipseq_exp"
 
 def get_parser():
     parser = argparse.ArgumentParser(
