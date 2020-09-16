@@ -9,23 +9,11 @@ def log_traceback(ex):
 chipSeq = dcc_submit.Submit(dcc_mode='prod')
 #chipSeq = dcc_submit.Submit(dcc_mode='dev')
 
+
 records = [
-#210,
-211,
-
-#275,
-#276,
-#278,
-#279,
-
-#285,
-#286,
-#287,
-#291,
-#292,
-#293,
-#294,
-#296,
+        281,
+        282,
+        283
         ]
 
 for record in records:

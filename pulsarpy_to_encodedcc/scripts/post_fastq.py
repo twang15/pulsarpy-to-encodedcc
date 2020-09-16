@@ -2,7 +2,7 @@ from pulsarpy_to_encodedcc.dcc_submit import Submit as submit
 
 fastq_submit = submit(dcc_mode='prod')
 replicates = [
-    (883,"/replicates/2991149b-54d8-4c08-a05e-2998455f1157/")
+    (698,"/replicates/d8858198-521f-4153-a487-b4875b482082/")
     ]
 
 for (res_id, replicate_id) in replicates:

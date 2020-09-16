@@ -33,8 +33,9 @@ def main():
 
     model = getattr(models, "Atacseq")
     for item in items:
-      rec = model.find_by({"upstream_identifier": item})
-      rec_id = rec['id']
+      #rec = model.find_by({"upstream_identifier": item})
+      #rec_id = rec['id']
+      rec_id = item
       S.post_bulk_atacseq_exp(rec_id=rec_id, patch=False)
 
     fh.close()

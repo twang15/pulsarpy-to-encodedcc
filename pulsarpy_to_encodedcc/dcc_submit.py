@@ -360,6 +360,7 @@ class Submit():
         # POST file records for all sequencing results for the Library
         sres_ids = pulsar_library.sequencing_result_ids
         if not sres_ids:
+            # return
             msg = "No SequencingResult for Library {} of Biosample {}, exiting.".format(pulsar_library.id, pulsar_biosample_id)
             error_logger.error(msg)
             raise MissingSequencingResult(msg)
@@ -1078,7 +1079,7 @@ class Submit():
         caption += " cells using anti-eGFP antibody."
         if btn in ['K562', 'GM12878', 'MCF-7']:
           caption += "The image shows western blot analysis of immunoprecipitation."
-        elif btn in ['SK-N-SH', 'A549', 'HEPG2', 'WTC-11']:
+        elif btn in ['SK-N-SH', 'A549', 'HepG2', 'HEPG2', 'WTC-11']:
           caption += "The image shows western blot analysis of input"
           caption += " (lane 1),"
           if not biosample.wild_type:
@@ -1093,7 +1094,7 @@ class Submit():
         
         if btn in ['K562', 'GM12878', 'MCF-7']:
           caption += "The target molecular weight is indicated."
-        elif btn in ['SK-N-SH', 'A549', 'HEPG2', 'WTC-11']:
+        elif btn in ['SK-N-SH', 'A549', 'HepG2', 'HEPG2', 'WTC-11']:
           if not biosample.wild_type:
               caption += " The target molecular weight is {} kD as indicated with an arrow.".format(gl.expected_product_size)
           if gl.low_target_band_intensity:
@@ -1298,8 +1299,11 @@ class Submit():
             else:
                 brn = exp_reps_instance.rep_hash[biosample.upstream_identifier]["brn"]
                 trn = exp_reps_instance.suggest_trn(biosample.upstream_identifier)
-         
-        if dcc_exp["assay_term_name"] == "ChIP-seq":
+        if lib.antibody_id:
+            antibody = models.Antibody(lib.antibody_id) 
+            if antibody.upstream_identifier:
+                payload["antibody"] = antibody.upstream_identifier
+        elif dcc_exp["assay_term_name"] == "ChIP-seq":
             # Only add antibody if not replicate on control experiment 
             if not dcc_exp.get("control_type"):
                 payload["antibody"] = "ENCAB728YTO" #AB-9 in Pulsar
@@ -1419,13 +1423,14 @@ class Submit():
         # Initialize file_path to be empty string.
         file_path = ""
         if data_storage_provider.name == "DNAnexus":
-            dx_file = dxpy.DXFile(dxid=file_uri)
+            dx_file = dxpy.DXFile(dxid=file_uri, project=data_storage.project_identifier)
             file_path = os.path.join(FASTQ_FOLDER, dx_file.name)
             # Check if file exists and is non-empty in download directory before attempting to download.
+            # file_uri = data_storage.project_identifier + ':' + file_uri
             if not patch:
                 if not os.path.exists(file_path) or not os.path.getsize(file_path):
                     # Download file.
-                    dxpy.download_dxfile(dxid=file_uri, filename=file_path, show_progress=True)
+                    dxpy.download_dxfile(dxid=file_uri, project=data_storage.project_identifier, filename=file_path, show_progress=True)
             file_ref = "dnanexus${}".format(file_uri)
             payload["aliases"].append(file_ref)
             payload["aliases"].append(dx_file.name)
