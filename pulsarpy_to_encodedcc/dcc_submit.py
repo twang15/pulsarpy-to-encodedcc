@@ -378,11 +378,13 @@ class Submit():
                 raise Exception(f'A library must either be part of Atacseq or ChIP, but not both.')
 
             ataqseq_exp = models.Atacseq(pulsar_library.atacseq_id)
-            if ataqseq_exp.single_cell:
-                if ataqseq_exp.snrna:
-                    exp_type = "snRNA"
+            if ataqseq_exp.single_cell and not atacseq_exp.snrna:
+                if atacseq_exp.multiome:
+                    exp_type = "scAtac-multiome"
                 else:
-                    exp_type = "scAtac"
+                    exp_type = "scAtac-nonMultiome"
+            elif not ataqseq_exp.single_cell and ataqseq_exp.snrna:
+                exp_type = "snRNA"
         
         if exp_type == "nonSC":
             for i in sres_ids:
@@ -391,10 +393,12 @@ class Submit():
             print("single nucleus RNA-seq")
             for i in sres_ids:
                 self.post_sres_snRNA_seq(pulsar_sres_id=i, enc_replicate_id=replicate_upstream, patch=patch)
-        elif exp_type == "scAtac":
+        elif exp_type == "scAtac-multiome":
             print("single cell Atac-seq")
             for i in sres_ids:
                 self.post_sres_scAtac_seq(pulsar_sres_id=i, enc_replicate_id=replicate_upstream, patch=patch)
+        elif exp_type == "scAtac-nonMultiome":
+            assert(0), "Separated single-cell Atacseq has not been implemented yet!"
 
     
     def post_sres_snRNA_seq(self, pulsar_sres_id, enc_replicate_id, patch=False):
@@ -443,7 +447,7 @@ class Submit():
         for lane in Lanes:
             # R1: read 1
             self.post_fastq_file(pulsar_sres_id=sres.id, read_num=1, enc_replicate_id=enc_replicate_id, \
-                        exp_type="scAtac", lane_num=lane, patch=patch)
+                        exp_type="scAtac-multiome", lane_num=lane, patch=patch)
             if not sreq.paired_end and sres.read2_uri:
                 sres.patch({"paired_end": True})
     
@@ -451,11 +455,11 @@ class Submit():
             if sreq.paired_end:
                 # Submit read2
                 self.post_fastq_file(pulsar_sres_id=sres.id, read_num=3, enc_replicate_id=enc_replicate_id, \
-                        exp_type="scAtac", lane_num=lane, patch=patch)
+                        exp_type="scAtac-multiome", lane_num=lane, patch=patch)
     
             # R2: index read
             self.post_fastq_file(pulsar_sres_id=sres.id, read_num=2, enc_replicate_id=enc_replicate_id, \
-                        exp_type="scAtac", lane_num=lane, patch=patch)
+                        exp_type="scAtac-multiome", lane_num=lane, patch=patch)
     
     def post_sres(self, pulsar_sres_id, enc_replicate_id, patch=False):
         """
@@ -1546,6 +1550,8 @@ class Submit():
         #    payload["run_type"] = "paired-ended"
         #else:
         #    payload["run_type"] = "single-ended"
+        assert(exp_type != "scAtac-nonMultiome"), "separated single-cell Atac-seq not supported yet!"
+
         if read_num == 1:
             payload["run_type"] = "paired-ended"
             payload["paired_end"] = "1"
@@ -1559,7 +1565,7 @@ class Submit():
             elif exp_type == "snRNA":
                 print("single nucleus RNA-seq")
                 payload["read_length"] = 28
-            elif exp_type == "scAtac":
+            elif exp_type in ["scAtac-multiome", "scAtac-nonMultiome"]:
                 print("single cell Atac-seq read 1 submission.")
                 payload["read_length"] = 50
         elif read_num == 2:
@@ -1578,16 +1584,17 @@ class Submit():
                     raise Exception("Can't set paired_with for SequencingResult {} since R1 doesn't have an upstream set.".format(sres.id))
                 payload["paired_with"] = sres.read1_upstream_identifier
             elif exp_type == "snRNA":
-                print("single nucleus RNA-seq")
+                print("single nucleus RNA-seq read 2")
                 
                 payload["run_type"] = "paired-ended"
                 payload["paired_end"] = "2"
-                payload["read_length"] = 28
+                payload["read_length"] = 90
                 payload["output_type"] = "reads"
+                payload["paired_with"] = sres.read1_upstream_identifier
                 file_uri = sres.read2_uri
                 upstream_id = sres.read2_upstream_identifier
                 read_count = sres.read2_count
-            elif exp_type == "scAtac":
+            elif exp_type == "scAtac-multiome":
                 print("single cell Atac-seq index read (R2) submission.")
                 
                 # no need for index read to have payload["run_type"] or payload["paired_end"]
@@ -1599,10 +1606,20 @@ class Submit():
                 if not sres.read2_upstream_identifier:
                     raise Exception("Can't set index_of for SequencingResult {} since read 2 (R3) doesn't have an upstream set.".format(sres.id))
                 payload["index_of"] = [sres.read1_upstream_identifier, sres.read2_upstream_identifier]
+            elif exp_type == "scAtac-nonMultiome":
+                print("single cell Atac-seq read 2")
+                
+                payload["run_type"] = "paired-ended"
+                payload["paired_end"] = "2"
+                payload["read_length"] = 50
+                payload["output_type"] = "reads"
+                file_uri = sres.read2_uri
+                upstream_id = sres.read2_upstream_identifier
+                read_count = sres.read2_count
         elif read_num == 3:
             if exp_type in ["nonSC", "snRNA"]:
                 raise Exception("Unimplemented for nonSC or snRNA experiment read 3's submission.")
-            elif exp_type == "scAtac":
+            elif exp_type == "scAtac-multiome":
                 print("single cell Atac-seq read 2 (R3) submission.")
                 file_uri = sres.read2_uri
                 upstream_id = sres.read2_upstream_identifier
@@ -1627,7 +1644,14 @@ class Submit():
 
         # extract barcode
         barcode = models.Barcode.find_by({'id': str(lib['barcode_id'])})
-        barcode_sequence = barcode['sequence'].replace(',', '_')
+        if barcode:
+            barcode_sequence = barcode['sequence'].replace(',', '_')
+        else:
+            pbc = models.PairedBarcode(lib.paired_barcode_id)
+            if pbc:
+                barcode_sequence = models.Barcode(pbc.index1_id)["sequence"] + "_" + models.Barcode(pbc.index2_id)["sequence"]
+
+        assert(barcode_sequence), "Barcode should never be empty for a library to submit."
             
         # Check file existence
         # Assumption: there is only one fastq file for each read.
@@ -1800,7 +1824,7 @@ class Submit():
                 else:
                     pbc_id = lib.paired_barcode_id
                     pbc = models.PairedBarcode(pbc_id)
-                    barcode = pbc.index1["sequence"] + "-" + pbc.index2["sequence"]
+                    barcode = models.Barcode(pbc.index1_id)["sequence"] + "-" + models.Barcode(pbc.index2_id)["sequence"]
                 details["barcode"] = barcode
                 results.append(details)
         return results
