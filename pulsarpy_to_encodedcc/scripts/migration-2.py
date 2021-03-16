@@ -40,6 +40,18 @@ def write_out(accession, fout, library, download=False):
     
     fout.flush()
 
+def download_fastq_file_only():
+    '''
+    Only download fastq files.
+    Directory on DX has to be re-organized.
+    '''
+       # # read 1
+       # file_uri = library['read1_uri']
+       # dx_file = dxpy.DXFile(dxid=file_uri, project=data_storage.project_identifier)
+       # file_path = os.path.join(FASTQ_FOLDER, dx_file.name)
+
+       # # read 2
+
 def download_fastq_file(library, read_num):
     '''
     Download fastq file from DNANexus.
@@ -84,12 +96,6 @@ def download_fastq_file(library, read_num):
         raise Exception(f'Fastq file for project {project} read {read_num} does not exist.')
         return None
 
-       # # read 1
-       # file_uri = library['read1_uri']
-       # dx_file = dxpy.DXFile(dxid=file_uri, project=data_storage.project_identifier)
-       # file_path = os.path.join(FASTQ_FOLDER, dx_file.name)
-
-       # # read 2
 
 def fastq_md5sum(fileName):
     '''

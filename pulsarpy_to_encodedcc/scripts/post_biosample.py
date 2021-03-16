@@ -41,14 +41,14 @@ def main():
   
     fh.close()
 
-    fout = open('enc', 'w')
+    fout = open('out', 'w')
 
     for record in records:
         # patch
-        upstream_id = submitter.post_biosample(rec_id=record, patch=True)
+        #upstream_id = submitter.post_biosample(rec_id=record, patch=True)
 
         # post
-        #upstream_id = submitter.post_biosample(rec_id=record, patch=False)
+        upstream_id = submitter.post_biosample(rec_id=record, patch=False)
         fout.write(f'{record} {upstream_id}\n')
     
     fout.close()

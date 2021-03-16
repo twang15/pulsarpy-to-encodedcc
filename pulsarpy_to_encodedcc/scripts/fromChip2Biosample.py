@@ -33,23 +33,28 @@ def main():
   fh.close()
 
 
-  #model = getattr(pulsarpy.models, "ChipseqExperiment")
-  model = getattr(pulsarpy.models, "Atacseq")
+  model = getattr(pulsarpy.models, "ChipseqExperiment")
+  #model = getattr(pulsarpy.models, "Atacseq")
   fout = open("bid", "w")
 
   for item in items:
-    #rec = model.find_by({"upstream_identifier": item})
-    rec = model.find_by({"id": item})
+    rec = model.find_by({"upstream_identifier": item})
+    #rec = model.find_by({"id": item})
 
     for lid in rec['replicate_ids']:
       library_model = getattr(pulsarpy.models, "Library")
       library_rec = library_model.find_by({"id": lid})
       bid = library_rec["biosample_id"]
       biosample = pulsarpy.models.Biosample(bid)
-      bid = biosample.upstream_identifier
+      child_pcr = biosample.pcr_ids
 
-      fout.write(f"{library_rec['upstream_identifier']} {bid} {rec['upstream_identifier']}\n")
-      #fout.write(f"{item} {bid}\n")
+      parent = biosample.part_of_id
+      p = pulsarpy.models.Biosample(parent)
+      parent_pcr = p.pcr_ids
+      #bid = biosample.upstream_identifier
+
+      #fout.write(f"{library_rec['upstream_identifier']} {bid} {rec['upstream_identifier']}\n")
+      fout.write(f"{item} {bid} {child_pcr} {parent} {parent_pcr}\n")
 
   fout.close()
 

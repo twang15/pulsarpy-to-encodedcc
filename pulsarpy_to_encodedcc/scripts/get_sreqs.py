@@ -96,6 +96,24 @@ def extract_library_meta(accession, library_id, replicate_type, fout):
         srun = models.SequencingRun.find_by({'id': srun_id})
         fout.write(f'{accession}\t{library_id}\t{sreq_id}\t{srun["data_storage_id"]}\n')
 
+def sreqs_meta(fout):
+    empty = []
+    for sreq_id in range(1, 302):
+        sreq = models.SequencingRequest.find_by({'id': sreq_id})
+
+        if sreq:
+            # sequencing run and DX project
+            if len(sreq['sequencing_run_ids']) == 0:
+                #raise Exception('Sequencing request {} has zero or more than one sequencing requests.'.format(sreq['id']))
+                empty.extend([sreq_id])
+
+            for srun_id in sreq['sequencing_run_ids']:
+                srun = models.SequencingRun.find_by({'id': srun_id})
+                fout.write(f'{sreq_id}\t{sreq["name"]}\t{srun["data_storage_id"]}\t{srun["name"]}\n')
+                fout.flush()
+
+    print (empty)
+
 def main():
     parser = get_parser()
     args = parser.parse_args()
@@ -113,9 +131,10 @@ def main():
     fh.close()
 
     fout = open('enc', 'w')
-    for record in records:
-        extract_chip_meta(record, fout)
-        #fout.write(f'{record} {upstream_id}\n')
+    sreqs_meta(fout)
+#    for record in records:
+#        extract_chip_meta(record, fout)
+#        #fout.write(f'{record} {upstream_id}\n')
 
     fout.close()
 

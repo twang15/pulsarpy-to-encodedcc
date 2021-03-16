@@ -37,8 +37,8 @@ def main():
             fout.write("\n")
             continue
         #rec = model.find_by({"id": name})
-        rec = model.find_by({"name": name})
-        #rec = model.find_by({"upstream_identifier": name})
+        #rec = model.find_by({"name": name})
+        rec = model.find_by({"upstream_identifier": name})
         #fout.write(f'{rec["upstream_identifier"]} {name}\n')
         fout.write(f'{rec["id"]}\n')
 

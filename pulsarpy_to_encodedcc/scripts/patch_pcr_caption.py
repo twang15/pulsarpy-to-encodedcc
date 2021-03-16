@@ -102,82 +102,22 @@ def main():
 
         # required field https://www.encodeproject.org/profiles/genetic_modification_characterization
         crispr = Crispr_model(crispr_id)
-        payload = {'characterizes': crispr['upstream_identifier']}
-        payload['award'] = "/awards/UM1HG009442/"
-        payload['lab'] = "/labs/michael-snyder/"
-
-        GEL_IMAGE_DIR = os.path.join(os.path.curdir, "gel_images")
-        if not os.path.exists(GEL_IMAGE_DIR):
-            os.mkdir(GEL_IMAGE_DIR)
-        gel = pulsarpy.models.Gel(pcr['gel_id'])
-        if not gel.gel_image_ids:
-            msg = "GelLane {} of Gel {} for Biosample {} is missing a GelImage.".format(gel.id, gel.id, biosample['id'])
-            error_logger.error(msg)
-            raise IpLaneException(msg)
-        gel_image = pulsarpy.models.GelImage(sorted(gel.gel_image_ids)[0])
-        # The image URI is expected to have public read permission.
-        # Some paths store a // at the beginning to tell the browser to use the same protocol as it's currently
-        # using (HTTP/HTTPS). In that case, just prefix it with 'https:'.
-        image_uri = gel_image.image
-        if image_uri.startswith("//"):
-            image_uri = "https:" + image_uri
-        image_basename = os.path.basename(image_uri)
-        image_exists_locally = os.path.join(GEL_IMAGE_DIR, image_basename)
-        if not os.path.exists(image_exists_locally):
-            # Then download it
-            stream = requests.get(image_uri, stream=True)
-            img = open(image_exists_locally, 'wb')
-            for line in stream.iter_content(chunk_size=512):
-                img.write(line)
-            img.close()
-        payload["attachment"] = {"path": image_exists_locally}
-
-        payload["characterization_method"] = "PCR analysis"
+        crispr_construct_id = crispr['crispr_construct_ids'][0]
+        crispr_construct = pulsarpy.models.CrisprConstruct(crispr_construct_id)
+        target_TF = pulsarpy.models.Target(crispr_construct['target_id'])['name']
 
         # cell line name
         btn = pulsarpy.models.BiosampleTermName(biosample['biosample_term_name_id']).name
-
-        # pcr master mix
-        pcr_master_mix = "Longamp 2x Master Mix"
-
-        # forward primer
-        primer_forward = pulsarpy.models.Primer(pcr['forward_primer_id'])
-        sequence_forward = primer_forward.sequence
-
-        # reverse primer
-        primer_reverse = pulsarpy.models.Primer(pcr['reverse_primer_id'])
-        sequence_reverse = primer_reverse.sequence
-
+        
+        # use a brief caption
+        caption = "genetic modification characterization for {} in cell line {}.".format(target_TF, btn)
+        payload = {'caption': caption}
+        
         # gel_lane
+        gel = pulsarpy.models.Gel(pcr['gel_id'])
         gel_lanes = get_gel_lane_with_biosmaple_pcr(biosample['id'], gel.id)
         if not gel_lanes:
             raise IpLaneException("Could't find a GelLane that has Biosample {} on gel {}.".format(biosample_id, gel_id))
-        multiple_lanes = True if len(gel_lanes) > 1 else False
-        lanes = []
-        for gel_lane in gel_lanes:
-            lanes.append(gel_lane.lane_number)
-
-        if multiple_lanes:
-            lane_string = " in multiple lanes: " + ", ".join([str(l) for l in sorted(lanes)])
-        else:
-            lane_string = " in the lane: {}".format(lanes[0])
-        payload["review"] = {"lab": "richard-myers", "lane": sorted(lanes)[0]}
-        
-        # put as much information as possible into caption
-        #caption = "PCR analysis {} for biosample {} of cell line {}".format(pcr['name'], biosample['upstream_identifier'], btn)
-        #caption += lane_string
-
-        #caption += " with pcr master mix: {}, forward primer sequence: {}, reverse primer sequence: {}".format(
-        #        pcr_master_mix,
-        #        sequence_forward,
-        #        sequence_reverse)
-
-        # use a brief caption
-        caption = "PCR analysis {} for cell line {}.".format(pcr['name'], btn)
-        payload['caption'] = caption
-
-        if pcr['notes']:
-            payload["submitter_comment"] = pcr['notes']
 
         # Submit payload
         if patch:  

@@ -11,9 +11,8 @@ chipSeq = dcc_submit.Submit(dcc_mode='prod')
 
 
 records = [
-        281,
-        282,
-        283
+        #369,
+        129,
         ]
 
 for record in records:

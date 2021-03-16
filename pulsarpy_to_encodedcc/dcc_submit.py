@@ -25,7 +25,7 @@ Optional environment variables:
 
 import base64
 import logging
-import os
+import os, glob
 import re
 import requests
 import sys
@@ -260,7 +260,7 @@ class Submit():
             aliases.append(abbrev_alias)
         # Add value of 'name' property as an alias, if this property exists for the given model.
         try:
-            name = self.sanitize_prop_val(pulsar_rec.name)
+            name = self.sanitize_prop_val(pulsar_rec.name).replace('&', ' and ')
             if name:
                 # Need to prepend the model abbreviation to the name since some names are the same
                 # between models. For example, its common in Pulsar to have a Library named the
@@ -352,22 +352,111 @@ class Submit():
         biosample = models.Biosample(pulsar_biosample_id)
         #if not dcc_exp_id:
         #    dcc_exp_id = self.get_exp_of_biosample(biosample_upstream)
-            
+        
         # POST library record
         library_upstream = self.post_library(rec_id=pulsar_library.id, patch=patch)
+        
         # POST replicate record
         replicate_upstream = self.post_replicate(pulsar_library_id=pulsar_library.id, dcc_exp_id=dcc_exp_id, patch=patch)
+        
         # POST file records for all sequencing results for the Library
         sres_ids = pulsar_library.sequencing_result_ids
         if not sres_ids:
-            # return
+            # TODO: shall we require existence of SRES for fastq submission?
+            error_logger.error(f"Now trying post fastq file directly from SCG for Library {pulsar_library.id}")
+            sreq = pulsar_library.sequencing_request_ids
+
+            # the sequencing result does not exist either on DX or SCG.
             msg = "No SequencingResult for Library {} of Biosample {}, exiting.".format(pulsar_library.id, pulsar_biosample_id)
             error_logger.error(msg)
             raise MissingSequencingResult(msg)
         
-        for i in sres_ids:
-            self.post_sres(pulsar_sres_id=i, enc_replicate_id=replicate_upstream, patch=patch)
+        # determine experiment type to delegate fastq submission APIs
+        exp_type = "nonSC" # ChIP or bulkAtac
+        if pulsar_library.atacseq_id:
+            if pulsar_library.chipseq_experiment_id:
+                raise Exception(f'A library must either be part of Atacseq or ChIP, but not both.')
 
+            ataqseq_exp = models.Atacseq(pulsar_library.atacseq_id)
+            if ataqseq_exp.single_cell:
+                if ataqseq_exp.snrna:
+                    exp_type = "snRNA"
+                else:
+                    exp_type = "scAtac"
+        
+        if exp_type == "nonSC":
+            for i in sres_ids:
+                self.post_sres(pulsar_sres_id=i, enc_replicate_id=replicate_upstream, patch=patch)
+        elif exp_type == "snRNA":
+            print("single nucleus RNA-seq")
+            for i in sres_ids:
+                self.post_sres_snRNA_seq(pulsar_sres_id=i, enc_replicate_id=replicate_upstream, patch=patch)
+        elif exp_type == "scAtac":
+            print("single cell Atac-seq")
+            for i in sres_ids:
+                self.post_sres_scAtac_seq(pulsar_sres_id=i, enc_replicate_id=replicate_upstream, patch=patch)
+
+    
+    def post_sres_snRNA_seq(self, pulsar_sres_id, enc_replicate_id, patch=False):
+        """
+        A wrapper over ``self.post_fastq_file()``.  Whereas ``self.post_fastq_file()`` only 
+        uploads the FASTQ file for the given read number and lanes, this method calls ``self.post_fastq_file()``
+        four times potentially
+
+        For each of the two lanes (L001 and L002), there are 2 calls:
+            one for R1 (read 1)
+            one for R2 (read 2)
+        """
+        sres = models.SequencingResult(pulsar_sres_id)
+        srun = models.SequencingRun(sres.sequencing_run_id)
+        sreq = models.SequencingRequest(srun.sequencing_request_id)
+        Lanes = ['L001', 'L002']
+
+        for lane in Lanes:
+            # R1: read 1
+            self.post_fastq_file(pulsar_sres_id=sres.id, read_num=1, enc_replicate_id=enc_replicate_id, \
+                        exp_type="snRNA", lane_num=lane, patch=patch)
+            if not sreq.paired_end and sres.read2_uri:
+                sres.patch({"paired_end": True})
+    
+            # R2: read 2
+            if sreq.paired_end:
+                # Submit read2
+                self.post_fastq_file(pulsar_sres_id=sres.id, read_num=2, enc_replicate_id=enc_replicate_id, \
+                        exp_type="snRNA", lane_num=lane, patch=patch)
+    
+    def post_sres_scAtac_seq(self, pulsar_sres_id, enc_replicate_id, patch=False):
+        """
+        A wrapper over ``self.post_fastq_file()``.  Whereas ``self.post_fastq_file()`` only 
+        uploads the FASTQ file for the given read number and lanes, this method calls ``self.post_fastq_file()``
+        six times potentially
+        For each of the two lanes (L001 and L002), there are 3 calls:
+            one for R1 (read 1)
+            one for R3 (read 2)
+            one for R2 (index read)
+        """
+        sres = models.SequencingResult(pulsar_sres_id)
+        srun = models.SequencingRun(sres.sequencing_run_id)
+        sreq = models.SequencingRequest(srun.sequencing_request_id)
+        Lanes = ['L001', 'L002']
+
+        for lane in Lanes:
+            # R1: read 1
+            self.post_fastq_file(pulsar_sres_id=sres.id, read_num=1, enc_replicate_id=enc_replicate_id, \
+                        exp_type="scAtac", lane_num=lane, patch=patch)
+            if not sreq.paired_end and sres.read2_uri:
+                sres.patch({"paired_end": True})
+    
+            # R3: read 2
+            if sreq.paired_end:
+                # Submit read2
+                self.post_fastq_file(pulsar_sres_id=sres.id, read_num=3, enc_replicate_id=enc_replicate_id, \
+                        exp_type="scAtac", lane_num=lane, patch=patch)
+    
+            # R2: index read
+            self.post_fastq_file(pulsar_sres_id=sres.id, read_num=2, enc_replicate_id=enc_replicate_id, \
+                        exp_type="scAtac", lane_num=lane, patch=patch)
+    
     def post_sres(self, pulsar_sres_id, enc_replicate_id, patch=False):
         """
         A wrapper over ``self.post_fastq_file()``.  Whereas ``self.post_fastq_file()`` only 
@@ -477,13 +566,14 @@ class Submit():
         alias.rstrip()
         if wt_input:
             alias_prefix = "pWT-CTL_"
+            payload["control_type"] = "wild type"
         else:
             alias_prefix = "pPI-CTL_"
+            payload["control_type"] = "input library"
         alias = alias_prefix + alias 
         payload["aliases"] = [alias]
         payload.update(self.get_exp_core_payload_props(pulsar_exp_rec=pulsar_exp, assay_term_name="ChIP-seq"))
         payload["description"] = "ChIP-seq on human " + self.ENC_CONN.get(payload["biosample_ontology"])["term_name"]
-        payload["control_type"] = "input library"
   
         # Before POSTING experiment, check if it already exists on the Portal.
         # POST experiment. Don't use self.post() since there isn't a Pulsar model for a control experiment.
@@ -505,6 +595,66 @@ class Submit():
                 for lib_id in b.library_ids:
                     self.post_library_through_fastq(pulsar_library_id=lib_id, dcc_exp_id=ctl_exp_accession, patch=patch)
         return ctl_exp_accession
+
+    def post_snRNAseq_exp(self, rec_id, patch=False, patch_all=False):
+        """
+        Args:
+            rec_id: `int`. ID of an single-nucleus RNAseq experiment record in Pulsar.
+            patch: `bool`. True means to patch the DCC experiment record.
+            patch_all: `bool`. True means to patch not just the experiment record, but its sub-entities
+                also, i.e. biosamples, libraries, replicates, ... Setting this to True automatically
+                sets `patch` to True as well.
+
+        Returns:
+        """
+        if patch_all:
+            patch = True
+        pulsar_exp = models.Atacseq(rec_id)
+        assert((not pulsar_exp.single_cell and pulsar_exp.snrna)), "Not a single-nucleus RNAseq experiment."
+        pulsar_exp_upstream = pulsar_exp.upstream_identifier
+        payload = {}
+        payload.update(self.get_exp_core_payload_props(pulsar_exp_rec=pulsar_exp, assay_term_name="single-nucleus RNA-seq"))
+        desc = pulsar_exp.description.strip()
+        if desc:
+            payload["description"] = desc
+        # submit experiment
+        if patch:
+            dcc_exp_accession = self.patch(payload=payload, upstream_id=pulsar_exp_upstream)
+        if patch_all or not patch:
+            dcc_exp_accession = self.post(payload=payload, dcc_profile="experiment", pulsar_model=models.Atacseq, pulsar_rec_id=rec_id)
+            self.post_experimental_reps(rec_id=rec_id, experiment_type="atac-seq", patch=patch)
+
+        return dcc_exp_accession
+
+    def post_scAtacseq_exp(self, rec_id, patch=False, patch_all=False):
+        """
+        Args:
+            rec_id: `int`. ID of an AtacSeq experiment record in Pulsar. Should be a single-cell atac experiment. 
+            patch: `bool`. True means to patch the DCC experiment record.
+            patch_all: `bool`. True means to patch not just the experiment record, but its sub-entities
+                also, i.e. biosamples, libraries, replicates, ... Setting this to True automatically
+                sets `patch` to True as well.
+
+        Returns:
+        """
+        if patch_all:
+            patch = True
+        pulsar_exp = models.Atacseq(rec_id)
+        assert((pulsar_exp.single_cell and not pulsar_exp.snrna)), "Not a single-cell Atac-seq experiment."
+        pulsar_exp_upstream = pulsar_exp.upstream_identifier
+        payload = {}
+        payload.update(self.get_exp_core_payload_props(pulsar_exp_rec=pulsar_exp, assay_term_name="single-cell ATAC-seq"))
+        desc = pulsar_exp.description.strip()
+        if desc:
+            payload["description"] = desc
+        # submit experiment
+        if patch:
+            dcc_exp_accession = self.patch(payload=payload, upstream_id=pulsar_exp_upstream)
+        if patch_all or not patch:
+            dcc_exp_accession = self.post(payload=payload, dcc_profile="experiment", pulsar_model=models.Atacseq, pulsar_rec_id=rec_id)
+            self.post_experimental_reps(rec_id=rec_id, experiment_type="atac-seq", patch=patch)
+
+        return dcc_exp_accession
 
     def post_bulk_atacseq_exp(self, rec_id, patch=False, patch_all=False):
         """
@@ -569,7 +719,7 @@ class Submit():
             # Then POST WT-input and paired-input control experiments. The WT-input is shared across
             # multiple experiments from the same starting batch, so it's possible that it was POSTED
             # already during submission of a related experiment. 
-            self.post_chipseq_control_experiments(rec_id=rec_id)
+            #self.post_chipseq_control_experiments(rec_id=rec_id)
             # POST experimental biosampes
             self.post_experimental_reps(rec_id=rec_id, experiment_type="chip-seq")
 
@@ -1159,7 +1309,8 @@ class Submit():
         starting_amount = rec.starting_amount
         if starting_amount:
             payload["starting_amount"] = starting_amount
-            payload["starting_amount_units"] = models.Unit(rec.starting_amount_units_id).name
+            payload["starting_amount_units"] = rec["starting_amount_units"]
+            #payload["starting_amount_units"] = models.Unit(rec.starting_amount_units_id).name
 
         submitter_comment = rec.submitter_comments
         if submitter_comment:
@@ -1331,7 +1482,7 @@ class Submit():
         
         
 
-    def post_fastq_file(self, pulsar_sres_id, read_num, enc_replicate_id, patch=False):
+    def post_fastq_file(self, pulsar_sres_id, read_num, enc_replicate_id, exp_type="nonSC", lane_num=None, patch=False):
         """
         Creates a file record on the ENCODE Portal. Checks the SequencingResult in Pulsar to see 
         where the file is stored. If stored in DNAnexus, the file will be downloaded locally into 
@@ -1382,11 +1533,9 @@ class Submit():
         platform = models.SequencingPlatform(sreq.sequencing_platform_id)
         payload = {}
         payload["aliases"] = []
-        payload["read_length"] = 100
-        payload["file_format"] = "fastq"
-        payload["output_type"] = "reads"
         # The Pulsar SequencingPlatform must already have the upstream_identifier attribute set.
         payload["platform"] = platform.upstream_identifier
+        payload["file_format"] = "fastq"
         # set flowcell_details
         flowcell_details = {}
         flowcell_details["barcode"] = lib.get_barcode_sequence()
@@ -1397,49 +1546,144 @@ class Submit():
         #    payload["run_type"] = "paired-ended"
         #else:
         #    payload["run_type"] = "single-ended"
-        payload["run_type"] = "paired-ended"
         if read_num == 1:
+            payload["run_type"] = "paired-ended"
             payload["paired_end"] = "1"
+            payload["output_type"] = "reads"
             file_uri = sres.read1_uri
             upstream_id = sres.read1_upstream_identifier
             read_count = sres.read1_count
+            
+            if exp_type == "nonSC":
+                payload["read_length"] = 100
+            elif exp_type == "snRNA":
+                print("single nucleus RNA-seq")
+                payload["read_length"] = 28
+            elif exp_type == "scAtac":
+                print("single cell Atac-seq read 1 submission.")
+                payload["read_length"] = 50
         elif read_num == 2:
-            payload["paired_end"] = "2"
-            file_uri = sres.read2_uri
-            upstream_id = sres.read2_upstream_identifier
-            read_count = sres.read2_count
-            # Need to set paired_with key in the payload. In this case, 
-            # it is expected that R1 has been already submitted.
-            if not sres.read1_upstream_identifier:
-                raise Exception("Can't set paired_with for SequencingResult {} since R1 doesn't have an upstream set.".format(sres.id))
-            payload["paired_with"] = sres.read1_upstream_identifier
-        if not file_uri:
-            raise NoFastqFile("SequencingResult '{}' for R{} does not have a FASTQ file path set.".format(pulsar_sres_id, read_num))
-        elif not upstream_id and patch:
-            raise Exception("Can't PATCH file object on the Portal when the SequencingResult {} for read {} doesn't have an upstream ID set.".format(pulsar_sres_id, read_num))
+            if exp_type == "nonSC":
+                payload["run_type"] = "paired-ended"
+                payload["paired_end"] = "2"
+                payload["read_length"] = 100
+                payload["output_type"] = "reads"
+                
+                file_uri = sres.read2_uri
+                upstream_id = sres.read2_upstream_identifier
+                read_count = sres.read2_count
+                # Need to set paired_with key in the payload. In this case, 
+                # it is expected that R1 has been already submitted.
+                if not sres.read1_upstream_identifier:
+                    raise Exception("Can't set paired_with for SequencingResult {} since R1 doesn't have an upstream set.".format(sres.id))
+                payload["paired_with"] = sres.read1_upstream_identifier
+            elif exp_type == "snRNA":
+                print("single nucleus RNA-seq")
+                
+                payload["run_type"] = "paired-ended"
+                payload["paired_end"] = "2"
+                payload["read_length"] = 28
+                payload["output_type"] = "reads"
+                file_uri = sres.read2_uri
+                upstream_id = sres.read2_upstream_identifier
+                read_count = sres.read2_count
+            elif exp_type == "scAtac":
+                print("single cell Atac-seq index read (R2) submission.")
+                
+                # no need for index read to have payload["run_type"] or payload["paired_end"]
+                payload["read_length"] = 24
+                payload["output_type"] = "index reads"
+
+                if not sres.read1_upstream_identifier:
+                    raise Exception("Can't set index_of for SequencingResult {} since read 1 (R1) doesn't have an upstream set.".format(sres.id))
+                if not sres.read2_upstream_identifier:
+                    raise Exception("Can't set index_of for SequencingResult {} since read 2 (R3) doesn't have an upstream set.".format(sres.id))
+                payload["index_of"] = [sres.read1_upstream_identifier, sres.read2_upstream_identifier]
+        elif read_num == 3:
+            if exp_type in ["nonSC", "snRNA"]:
+                raise Exception("Unimplemented for nonSC or snRNA experiment read 3's submission.")
+            elif exp_type == "scAtac":
+                print("single cell Atac-seq read 2 (R3) submission.")
+                file_uri = sres.read2_uri
+                upstream_id = sres.read2_upstream_identifier
+                read_count = sres.read2_count
+
+                payload["run_type"] = "paired-ended"
+                payload["paired_end"] = "2"
+                payload["read_length"] = 50
+                payload["output_type"] = "reads"
+                
+                # Need to set paired_with key in the payload. In this case, 
+                # it is expected that R1 has been already submitted.
+                if not sres.read1_upstream_identifier:
+                    raise Exception("Can't set paired_with for SequencingResult {} since R1 doesn't have an upstream set.".format(sres.id))
+                payload["paired_with"] = sres.read1_upstream_identifier
 
         data_storage = models.DataStorage(srun.data_storage_id)
         data_storage_provider = models.DataStorageProvider(data_storage.data_storage_provider_id)
+
         # Initialize file_path to be empty string.
         file_path = ""
-        if data_storage_provider.name == "DNAnexus":
-            dx_file = dxpy.DXFile(dxid=file_uri, project=data_storage.project_identifier)
-            file_path = os.path.join(FASTQ_FOLDER, dx_file.name)
-            # Check if file exists and is non-empty in download directory before attempting to download.
-            # file_uri = data_storage.project_identifier + ':' + file_uri
-            if not patch:
-                if not os.path.exists(file_path) or not os.path.getsize(file_path):
-                    # Download file.
-                    dxpy.download_dxfile(dxid=file_uri, project=data_storage.project_identifier, filename=file_path, show_progress=True)
-            file_ref = "dnanexus${}".format(file_uri)
-            payload["aliases"].append(file_ref)
-            payload["aliases"].append(dx_file.name)
-        elif data_storage_provider == "AWS S3 Bucket":
-            file_path = file_uri
-            # md5sum key added to payload by encode-utils.
-            payload["aliases"].append(file_uri) # i.e. s3://bucket-name/key
-            payload["aliases"].append(os.path.basename(file_uri))
 
+        # extract barcode
+        barcode = models.Barcode.find_by({'id': str(lib['barcode_id'])})
+        barcode_sequence = barcode['sequence'].replace(',', '_')
+            
+        # Check file existence
+        # Assumption: there is only one fastq file for each read.
+        files = []
+        sreq_id = lib['sequencing_request_ids']
+        if len(sreq_id) == 1:
+            #file_dir = '/oak/stanford/scg/prj_ENCODE/Staging/' + str(sreq_id[0])
+            file_dir = '/oak/stanford/scg/prj_ENCODE/SREQ/' + str(sreq_id[0])
+            if os.path.isdir(file_dir):
+                old_dir = os.getcwd()
+                os.chdir(file_dir)
+
+                # snRNA-seq and scAtac-seq
+                files = glob.glob("**/*" + lane_num + "*" + barcode_sequence + "*R" + str(read_num) + "*.fastq.gz", recursive=True)
+                
+                # ChIP and bulkAtac-seq
+                if not files:
+                    files = glob.glob("**/*" + barcode_sequence + "*R" + str(read_num) + "*.fastq.gz", recursive=True)
+        else:
+            raise Exception(f'More than one sequencing request exists for library {lib["id"]}')
+
+        # now look up the file's full path
+        if len(files) == 1:
+            file_path = os.path.abspath(files[0])
+            file_ref = "SCG${}".format(read_num)
+            #payload["aliases"].append(file_ref)
+            payload["aliases"].append(os.path.basename(file_path))
+            os.chdir(old_dir)
+        elif len(files) > 1:
+            raise Exception(f'More than one fastq files exist for sequencing result {pulsar_sres_id} read {read_num}.')
+            return None
+        else:
+            if not file_uri:
+                raise NoFastqFile("SequencingResult '{}' for R{} does not have a FASTQ file path set.".format(pulsar_sres_id, read_num))
+            elif not upstream_id and patch:
+                raise Exception("Can't PATCH file object on the Portal when the SequencingResult {} for read {} doesn't have an upstream ID set.".format(pulsar_sres_id, read_num))
+
+            #raise Exception(f'Fastq file for sequencing result {pulsar_sres_id} read {read_num} does not exist.')
+            if data_storage_provider.name == "DNAnexus":
+                dx_file = dxpy.DXFile(dxid=file_uri, project=data_storage.project_identifier)
+                file_path = os.path.join(FASTQ_FOLDER, dx_file.name)
+                # Check if file exists and is non-empty in download directory before attempting to download.
+                # file_uri = data_storage.project_identifier + ':' + file_uri
+                if not patch:
+                    if not os.path.exists(file_path) or not os.path.getsize(file_path):
+                        # Download file.
+                        dxpy.download_dxfile(dxid=file_uri, project=data_storage.project_identifier, filename=file_path, show_progress=True)
+                file_ref = "dnanexus${}".format(file_uri)
+                payload["aliases"].append(file_ref)
+                payload["aliases"].append(dx_file.name)
+            elif data_storage_provider == "AWS S3 Bucket":
+                file_path = file_uri
+                # md5sum key added to payload by encode-utils.
+                payload["aliases"].append(file_uri) # i.e. s3://bucket-name/key
+                payload["aliases"].append(os.path.basename(file_uri))
+        
         if not file_path:
             raise Exception("Could not locate FASTQ file for SequencingResult {}; read number {}.".format(pulsar_sres_id, read_num))
         payload["submitted_file_name"] = file_path 
@@ -1461,7 +1705,7 @@ class Submit():
                     # Instead of raise an Exception, let it slide. Pulsar users aren't setting the 
                     # boolean fields control and wild_type_control as they should be so it's not reliable. 
         else:
-            if dcc_exp_type != "ATAC-seq":
+            if dcc_exp_type not in ["ATAC-seq", "single-cell ATAC-seq", "single-nucleus RNA-seq"]:
                 raise Exception("There isn't yet support to set controlled_by for experiments of type {}.".format(dcc_exp_type))
 
         # POST to ENCODE Portal. Don't use post() method defined here that is a wrapper over 

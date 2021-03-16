@@ -7,7 +7,7 @@ sub = dcc_submit.Submit(dcc_mode='prod')
 # in dcc_submit.py, we need dont_extend_arrays = True
 
 biosample_ids = [
-    12386
+        11511
         ]
 
 for bid in biosample_ids:
