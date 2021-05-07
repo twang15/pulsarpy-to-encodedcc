@@ -371,7 +371,7 @@ class Submit():
         #    dcc_exp_id = self.get_exp_of_biosample(biosample_upstream)
         
         # POST library record
-        library_upstream = self.post_library(rec_id=pulsar_library.id, patch=patch)
+        library_upstream = self.post_library(rec_id=pulsar_library.id, exp_type=exp_type, patch=patch)
         
         # POST replicate record
         replicate_upstream = self.post_replicate(pulsar_library_id=pulsar_library.id, dcc_exp_id=dcc_exp_id, patch=patch)
@@ -1319,7 +1319,7 @@ class Submit():
         bty = models.BiosampleType(rec.biosample_type_id)
         payload["biosample_ontology"] = self.ENC_CONN.get_biosample_type(classification=bty.name, term_id=btn.accession)["@id"]
 
-        if exp_type == "snRNA":
+        if exp_type in ["scAtac-multiome", "snRNA"]:
             payload["subcellular_fraction_term_name"] = "nucleus"
 
         date_biosample_taken = rec.date_biosample_taken
@@ -1434,8 +1434,8 @@ class Submit():
         payload["size_range"] = rec.size_range
         payload["strand_specificity"] = bool(rec.strand_specific)
         #if not rec.strand_specific:
-        #if bool(rec.strand_specific) == False:
-        #    payload["strand_specificity"] = "unstranded"
+        if rec.strand_specific or exp_type in ["snRNA"]:
+            payload["strand_specificity"] = "reverse"
 
         if rec.vendor_id:
             payload["source"] = self.get_vendor_id_from_encodeportal(rec.vendor_id)
