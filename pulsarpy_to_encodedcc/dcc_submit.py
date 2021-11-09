@@ -270,8 +270,8 @@ class Submit():
                     aliases.append(alias_name)
         except KeyError:
             pass
-        payload["aliases"] = [aliases[0].replace(":", "-") + "-cs521-rep4"]
-        #payload["aliases"] = [alias.replace(":", "-") for alias in aliases]
+        #payload["aliases"] = [aliases[0].replace(":", "-") + "-cs521-rep4"]
+        payload["aliases"] = [alias.replace(":", "-") for alias in aliases]
 
         # make aliases unique since it is the key for ENCODE Portal to detect whether it is a duplicate.
         # Option 1: Myers approach, only submit one IP for both biosample
@@ -1333,7 +1333,7 @@ class Submit():
         bty = models.BiosampleType(rec.biosample_type_id)
         payload["biosample_ontology"] = self.ENC_CONN.get_biosample_type(classification=bty.name, term_id=btn.accession)["@id"]
 
-        if exp_type in ["scAtac-multiome", "snRNA"]:
+        if exp_type in ["scAtac-multiome", "snRNA-multiome", "snRNA-nonMultiome"]:
             payload["subcellular_fraction_term_name"] = "nucleus"
 
         date_biosample_taken = rec.date_biosample_taken
@@ -1435,7 +1435,7 @@ class Submit():
         # be linked to is the SingleCellSorting.sorting_biosample.
         payload["biosample"] = biosample.upstream_identifier
         payload["documents"] = self.post_documents(rec.document_ids)
-        if exp_type in ['scAtac-multiome', 'scAtac-nonMultiome', 'snRNA']:
+        if exp_type in ['scAtac-multiome', 'scAtac-nonMultiome', "snRNA-multiome", "snRNA-nonMultiome"]:
             payload["construction_platform"] = "/platforms/NTR:0000452/"
         
         fragmentation_method_id = rec.library_fragmentation_method_id
@@ -1452,7 +1452,7 @@ class Submit():
         payload["size_range"] = rec.size_range
         #payload["strand_specificity"] = bool(rec.strand_specific)
         #if not rec.strand_specific:
-        if rec.strand_specific or exp_type in ["snRNA"]:
+        if rec.strand_specific or exp_type in ["snRNA-multiome", "snRNA-nonMultiome"]:
             payload["strand_specificity"] = "reverse"
 
         if rec.vendor_id:
@@ -1662,7 +1662,7 @@ class Submit():
                 print("single nucleus RNA-seq read 2")
                 # required by DCC: see github issue 739
                 if exp_type == "snRNA-nonMultiome":
-                    payload['read_structure'] = {"sequence_element": "barcode", "start": 1, "end": 10}
+                    payload['read_structure'] = [{"sequence_element": "barcode", "start": 1, "end": 10}]
                 
                 payload["run_type"] = "paired-ended"
                 payload["paired_end"] = "2"
@@ -1681,8 +1681,7 @@ class Submit():
                 
                 # read_structure required by DCC
                 # For scAtac-nonMultiome, it is attached to index read (read 2)
-                if exp_type == "scAtac-multiome":
-                    payload['read_structure'] = {"sequence_element": "barcode", "start": 1, "end": 24}
+                payload['read_structure'] = [{"sequence_element": "barcode", "start": 1, "end": 24}]
 
                 if not sres.read1_upstream_identifier:
                     raise Exception("Can't set index_of for SequencingResult {} since read 1 (R1) doesn't have an upstream set.".format(sres.id))
@@ -1696,7 +1695,7 @@ class Submit():
                 payload["output_type"] = "index reads"
 
                 # read_structure required by DCC
-                payload['read_structure'] = {"sequence_element": "barcode", "start": 1, "end": 16}
+                payload['read_structure'] = [{"sequence_element": "barcode", "start": 1, "end": 16}]
                 
                 if not sres.read1_upstream_identifier:
                     raise Exception("Can't set index_of for SequencingResult {} since read 1 (R1) doesn't have an upstream set.".format(sres.id))
