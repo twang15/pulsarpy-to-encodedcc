@@ -270,8 +270,8 @@ class Submit():
                     aliases.append(alias_name)
         except KeyError:
             pass
-        #payload["aliases"] = [aliases[0] + "-cs361-rep4"]
-        payload["aliases"] = aliases
+        payload["aliases"] = [aliases[0].replace(":", "-") + "-cs521-rep4"]
+        #payload["aliases"] = [alias.replace(":", "-") for alias in aliases]
 
         # make aliases unique since it is the key for ENCODE Portal to detect whether it is a duplicate.
         # Option 1: Myers approach, only submit one IP for both biosample
@@ -361,7 +361,10 @@ class Submit():
                 else:
                     exp_type = "scAtac-nonMultiome"
             elif not atacseq_exp.single_cell and atacseq_exp.snrna:
-                exp_type = "snRNA"
+                if atacseq_exp.multiome == True:
+                    exp_type = "snRNA-multiome"
+                else:
+                    exp_type = "snRNA-nonMultiome"
 
         # POST biosample record
         pulsar_biosample_id = pulsar_library.biosample_id
@@ -397,10 +400,14 @@ class Submit():
                 # Double lane ChIP
                 print("ChIP-seq: double lanes with 2 Reads per lane.")
                 self.post_sres_chip_seq(pulsar_sres_id=i, enc_replicate_id=replicate_upstream, patch=patch)
-        elif exp_type == "snRNA":
-            print("single nucleus RNA-seq (multiome or separated).")
+        elif exp_type == "snRNA-multiome":
+            print("single nucleus RNA-seq multiome).")
             for i in sres_ids:
                 self.post_sres_snRNA_seq(pulsar_sres_id=i, enc_replicate_id=replicate_upstream, patch=patch)
+        elif exp_type == "snRNA-nonMultiome":
+            print("single nucleus RNA-seq separated).")
+            for i in sres_ids:
+                self.post_sres_snRNA_seq(pulsar_sres_id=i, enc_replicate_id=replicate_upstream, patch=patch, multiome=False)
         elif exp_type == "scAtac-multiome":
             print("single cell Atac-seq, multiome.")
             for i in sres_ids:
@@ -410,7 +417,7 @@ class Submit():
             for i in sres_ids:
                 self.post_sres_scAtac_seq(pulsar_sres_id=i, enc_replicate_id=replicate_upstream, patch=patch, multiome=False)
     
-    def post_sres_snRNA_seq(self, pulsar_sres_id, enc_replicate_id, patch=False):
+    def post_sres_snRNA_seq(self, pulsar_sres_id, enc_replicate_id, patch=False, multiome=True):
         """
         A wrapper over ``self.post_fastq_file()``.  Whereas ``self.post_fastq_file()`` only 
         uploads the FASTQ file for the given read number and lanes, this method calls ``self.post_fastq_file()``
@@ -420,6 +427,11 @@ class Submit():
             one for R1 (read 1)
             one for R2 (read 2)
         """
+        if multiome:
+            exp_type = "snRNA-multiome"
+        else:
+            exp_type = "snRNA-nonMultiome"
+
         sres = models.SequencingResult(pulsar_sres_id)
         srun = models.SequencingRun(sres.sequencing_run_id)
         sreq = models.SequencingRequest(srun.sequencing_request_id)
@@ -428,7 +440,7 @@ class Submit():
         for lane in Lanes:
             # R1: read 1
             self.post_fastq_file(pulsar_sres_id=sres.id, read_num=1, enc_replicate_id=enc_replicate_id, \
-                        exp_type="snRNA", lane_num=lane, patch=patch)
+                        exp_type=exp_type, lane_num=lane, patch=patch)
             if not sreq.paired_end and sres.read2_uri:
                 sres.patch({"paired_end": True})
     
@@ -436,7 +448,7 @@ class Submit():
             if sreq.paired_end:
                 # Submit read2
                 self.post_fastq_file(pulsar_sres_id=sres.id, read_num=2, enc_replicate_id=enc_replicate_id, \
-                        exp_type="snRNA", lane_num=lane, patch=patch)
+                        exp_type=exp_type, lane_num=lane, patch=patch)
     
     def post_sres_scAtac_seq(self, pulsar_sres_id, enc_replicate_id, patch=False, multiome=True):
         """
@@ -835,6 +847,7 @@ class Submit():
 
         # Then the Paired-input, which is unique to this experiment.
         try:
+            print ("posting input library control.")
             self.post_chipseq_ctl_exp(rec_id=rec_id, paired_input=True)
         except Exception as ex:
             print(ex)
@@ -843,7 +856,7 @@ class Submit():
             print("Input-library control experiment is available.")
             controls += 1
 
-        #assert(controls >= 1), "Either Wild-type control or input-library control or both should be available"
+        assert(controls >= 1), "Either Wild-type control or input-library control or both should be available"
 
 
     def post_experimental_reps(self, rec_id, experiment_type, patch=False):
@@ -862,6 +875,7 @@ class Submit():
             raise Exception("Unknown experiment type '{}' passed to experiment_type parameter.".format(experiment_type))
         rep_ids = pulsar_exp.replicate_ids
         for i in rep_ids:
+        #for i in [11817]:
             self.post_library_through_fastq(pulsar_library_id=i, dcc_exp_id=pulsar_exp.upstream_identifier, patch=patch)
 
     def get_exp_core_payload_props(self, pulsar_exp_rec, assay_term_name):
@@ -1428,11 +1442,15 @@ class Submit():
         if fragmentation_method_id:
             fragmentation_method = models.LibraryFragmentationMethod(fragmentation_method_id)
             payload["fragmentation_methods"] = [fragmentation_method.name]
-        payload["lot_id"] = rec.lot_identifier
+        if rec.lot_identifier:
+            payload["lot_id"] = rec.lot_identifier
         payload["nucleic_acid_term_name"] = models.NucleicAcidTerm(rec.nucleic_acid_term_id).name
-        payload["product_id"] = rec.vendor_product_identifier
+        
+        if rec.vendor_product_identifier:
+            payload["product_id"] = rec.vendor_product_identifier
+
         payload["size_range"] = rec.size_range
-        payload["strand_specificity"] = bool(rec.strand_specific)
+        #payload["strand_specificity"] = bool(rec.strand_specific)
         #if not rec.strand_specific:
         if rec.strand_specific or exp_type in ["snRNA"]:
             payload["strand_specificity"] = "reverse"
@@ -1612,12 +1630,19 @@ class Submit():
             
             if exp_type == "nonSC":
                 payload["read_length"] = 100
-            elif exp_type == "snRNA":
-                print("single nucleus RNA-seq")
+            elif exp_type in ["snRNA-multiome", "snRNA-nonMultiome"]:
+                print("single nucleus RNA-seq, multiome")
                 payload["read_length"] = 28
+                
+                # required by DCC: see github issue 739
+                if exp_type == "snRNA-multiome":
+                    payload['read_structure'] = [{"sequence_element": "barcode", "start": 1, "end": 16},
+                                                    {"sequence_element": "UMI", "start": 17, "end": 28}]
+
             elif exp_type in ["scAtac-multiome", "scAtac-nonMultiome"]:
                 print("single cell Atac-seq read 1 submission.")
                 payload["read_length"] = 50
+
         elif read_num == 2:
             if exp_type == "nonSC":
                 payload["run_type"] = "paired-ended"
@@ -1633,8 +1658,11 @@ class Submit():
                 if not sres.read1_upstream_identifier:
                     raise Exception("Can't set paired_with for SequencingResult {} since R1 doesn't have an upstream set.".format(sres.id))
                 payload["paired_with"] = sres.read1_upstream_identifier
-            elif exp_type == "snRNA":
+            elif exp_type in ["snRNA-multiome", "snRNA-nonMultiome"]:
                 print("single nucleus RNA-seq read 2")
+                # required by DCC: see github issue 739
+                if exp_type == "snRNA-nonMultiome":
+                    payload['read_structure'] = {"sequence_element": "barcode", "start": 1, "end": 10}
                 
                 payload["run_type"] = "paired-ended"
                 payload["paired_end"] = "2"
@@ -1650,6 +1678,11 @@ class Submit():
                 # no need for index read to have payload["run_type"] or payload["paired_end"]
                 payload["read_length"] = 24
                 payload["output_type"] = "index reads"
+                
+                # read_structure required by DCC
+                # For scAtac-nonMultiome, it is attached to index read (read 2)
+                if exp_type == "scAtac-multiome":
+                    payload['read_structure'] = {"sequence_element": "barcode", "start": 1, "end": 24}
 
                 if not sres.read1_upstream_identifier:
                     raise Exception("Can't set index_of for SequencingResult {} since read 1 (R1) doesn't have an upstream set.".format(sres.id))
@@ -1661,6 +1694,9 @@ class Submit():
                 
                 payload["read_length"] = 16
                 payload["output_type"] = "index reads"
+
+                # read_structure required by DCC
+                payload['read_structure'] = {"sequence_element": "barcode", "start": 1, "end": 16}
                 
                 if not sres.read1_upstream_identifier:
                     raise Exception("Can't set index_of for SequencingResult {} since read 1 (R1) doesn't have an upstream set.".format(sres.id))
@@ -1668,7 +1704,7 @@ class Submit():
                     raise Exception("Can't set index_of for SequencingResult {} since read 2 (R3) doesn't have an upstream set.".format(sres.id))
                 payload["index_of"] = [sres.read1_upstream_identifier, sres.read2_upstream_identifier]
         elif read_num == 3:
-            if exp_type in ["nonSC", "snRNA"]:
+            if exp_type in ["nonSC", "snRNA-multiome", "snRNA-nonMultiome"]:
                 raise Exception("Unimplemented for nonSC or snRNA experiment read 3's submission.")
             elif exp_type in ["scAtac-multiome", "scAtac-nonMultiome"]:
                 print("single cell Atac-seq read 2 (R3) submission.")
